@@ -18,5 +18,5 @@
 
 package grpc
 
-// Version is the current grpc version.
+// Version is the current grpc version
 const Version = "1.64.0-dev"
