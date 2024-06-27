@@ -983,6 +983,7 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 // only once on a transport. Once it is called, the transport should not be
 // accessed anymore.
 func (t *http2Client) Close(err error) {
+	//t.conn.SetDeadline(time.Now().Add(1 * time.Second))
 	t.mu.Lock()
 	// Make sure we only close once.
 	if t.state == closing {
@@ -1009,21 +1010,29 @@ func (t *http2Client) Close(err error) {
 	// Per HTTP/2 spec, a GOAWAY frame must be sent before closing the
 	// connection. See https://httpwg.org/specs/rfc7540.html#GOAWAY.
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte("client transport shutdown"), closeConn: err})
-	<-t.writerDone
+	timer := time.NewTimer(5 * time.Second)
+	t.logger.Infof("Waiting for the writerDone to be closed after sendign GoAway frame %v", time.Now())
+	select {
+	case <-t.writerDone:
+	case <-timer.C:
+		t.logger.Infof("timeout waiting for the loopy writer to be closed %v", time.Now())
+	}
+	//<-t.writerDone
 	t.cancel()
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelz.ID)
+	t.logger.Infof("closed http2_client %v", time.Now())
 	// Append info about previous goaways if there were any, since this may be important
 	// for understanding the root cause for this connection to be closed.
-	_, goAwayDebugMessage := t.GetGoAwayReason()
+	//_, goAwayDebugMessage := t.GetGoAwayReason()
 
-	var st *status.Status
-	if len(goAwayDebugMessage) > 0 {
-		st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
-		err = st.Err()
-	} else {
-		st = status.New(codes.Unavailable, err.Error())
-	}
+	//var st *status.Status
+	//if len(goAwayDebugMessage) > 0 {
+	//	st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+	//	err = st.Err()
+	//} else {
+	st := status.New(codes.Unavailable, err.Error())
+	//}
 
 	// Notify all active streams.
 	for _, s := range streams {
@@ -1035,6 +1044,7 @@ func (t *http2Client) Close(err error) {
 		}
 		sh.HandleConn(t.ctx, connEnd)
 	}
+	t.logger.Infof("exit http2_client %v", time.Now())
 }
 
 // GracefulClose sets the state to draining, which prevents new streams from

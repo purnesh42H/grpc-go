@@ -92,6 +92,57 @@ const (
 	pingpong
 )
 
+type hangingConn struct {
+	net.Conn
+}
+
+func (hc *hangingConn) Read(b []byte) (n int, err error) {
+	n, err = hc.Conn.Read(b)
+	return n, err
+}
+
+func (hc *hangingConn) Write(b []byte) (n int, err error) {
+	n, err = hc.Conn.Write(b)
+	fmt.Printf("hangingConn Write %v\n", n)
+	if n == 42 {
+		time.Sleep(1 * time.Hour) // sleep after writing last frame i.e. GoAway to simulate network hang at client side
+	}
+	return n, err
+}
+
+func (hc *hangingConn) Close() error {
+	fmt.Printf("hangingConn Close %v\n", time.Now())
+	return hc.Conn.Close()
+}
+
+func (hc *hangingConn) LocalAddr() net.Addr {
+	return hc.Conn.LocalAddr()
+}
+
+func (hc *hangingConn) RemoteAddr() net.Addr {
+	return hc.Conn.RemoteAddr()
+}
+
+func (hc *hangingConn) SetDeadline(t time.Time) error {
+	return hc.Conn.SetDeadline(t)
+}
+
+func (hc *hangingConn) SetReadDeadline(t time.Time) error {
+	return hc.Conn.SetReadDeadline(t)
+}
+
+func (hc *hangingConn) SetWriteDeadline(t time.Time) error {
+	return hc.Conn.SetWriteDeadline(t)
+}
+
+func hangingDialer(_ context.Context, addr string) (net.Conn, error) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return &hangingConn{Conn: conn}, nil
+}
+
 func (h *testStreamHandler) handleStreamAndNotify(s *Stream) {
 	if h.notify == nil {
 		return
@@ -2670,7 +2721,7 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	greetDone := make(chan struct{})
 	// errorCh verifies that desired GOAWAY not received by server
 	errorCh := make(chan error)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Hour)
 	defer cancel()
 	// Launch the server.
 	go func() {
@@ -2725,7 +2776,7 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 		}
 	}()
 
-	ct, err := NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func(GoAwayReason) {})
+	ct, err := NewClientTransport(ctx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{Dialer: hangingDialer}, func(GoAwayReason) {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -2735,8 +2786,9 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 	}
 	// Wait until server receives the headers and settings frame as part of greet.
 	<-greetDone
+	t.Logf("Greet done %v", time.Now())
 	ct.Close(errors.New("manually closed by client"))
-	t.Logf("Closed the client connection")
+	t.Logf("Closed the client connection %v", time.Now())
 	select {
 	case err := <-errorCh:
 		if err != nil {
