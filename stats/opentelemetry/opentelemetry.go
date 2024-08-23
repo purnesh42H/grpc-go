@@ -33,6 +33,7 @@ import (
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func init() {
@@ -51,6 +52,9 @@ var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.Di
 type Options struct {
 	// MetricsOptions are the metrics options for OpenTelemetry instrumentation.
 	MetricsOptions MetricsOptions
+
+	// TraceOptions are the tracing options for opencensus instrumentation.
+	TraceOptions TraceOptions
 }
 
 // MetricsOptions are the metrics options for OpenTelemetry instrumentation.
@@ -181,6 +185,8 @@ type attemptInfo struct {
 
 	pluginOptionLabels map[string]string // pluginOptionLabels to attach to metrics emitted
 	xdsLabels          map[string]string
+
+	ti *traceInfo
 }
 
 type clientMetrics struct {
@@ -388,4 +394,25 @@ var (
 // This should only be invoked after init time.
 func DefaultMetrics() *estats.Metrics {
 	return defaultPerCallMetrics.Join(estats.DefaultMetrics)
+}
+
+// TraceOptions are the tracing options for opencensus instrumentation.
+type TraceOptions struct {
+	// DisableTrace determines whether traces are disabled for an OpenCensus
+	// Dial or Server option. will overwrite any global option setting.
+	DisableTrace bool
+}
+
+// SpanContextFromContext returns the Span Context about the Span in the
+// context. Returns false if no Span in the context.
+func SpanContextFromContext(ctx context.Context) (trace.SpanContext, bool) {
+	ri, ok := ctx.Value(rpcInfoKey{}).(*rpcInfo)
+	if !ok {
+		return trace.SpanContext{}, false
+	}
+	if ri.ai == nil || ri.ai.ti.span == nil {
+		return trace.SpanContext{}, false
+	}
+	sc := ri.ai.ti.span.SpanContext()
+	return sc, true
 }

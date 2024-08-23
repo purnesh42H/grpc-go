@@ -52,7 +52,10 @@ func main() {
 	ctx := context.Background()
 	do := opentelemetry.DialOption(opentelemetry.Options{MetricsOptions: opentelemetry.MetricsOptions{MeterProvider: provider}})
 
-	cc, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), do)
+	cc, err := grpc.NewClient(*addr,
+		grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"weighted_round_robin":{}}]}`),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		do)
 	if err != nil {
 		log.Fatalf("Failed to start NewClient: %v", err)
 	}

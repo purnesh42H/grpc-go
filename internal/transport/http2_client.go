@@ -20,6 +20,7 @@ package transport
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -444,6 +445,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		})
 	}
 	err = t.framer.fr.WriteSettings(ss...)
+	framerWindowUpdate, _ := json.Marshal([]http2.Setting{})
+	fmt.Printf("%v", framerWindowUpdate)
 	if err != nil {
 		err = connectionErrorf(true, err, "transport: failed to write initial settings frame: %v", err)
 		return nil, err

@@ -196,10 +196,15 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 			method = "other"
 		}
 	}
+	var ti *traceInfo
+	if !h.options.TraceOptions.DisableTrace {
+		ctx, ti = h.traceTagRPC(ctx, info)
+	}
 
 	ai := &attemptInfo{
 		startTime: time.Now(),
 		method:    removeLeadingSlash(method),
+		ti:        ti,
 	}
 	ri := &rpcInfo{
 		ai: ai,
@@ -215,6 +220,9 @@ func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		return
 	}
 	h.processRPCData(ctx, rs, ri.ai)
+	if !h.options.TraceOptions.DisableTrace {
+		populateSpan(ctx, rs, ri.ai.ti)
+	}
 }
 
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {

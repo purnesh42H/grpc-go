@@ -1,0 +1,117 @@
+package opentelemetry
+
+import (
+	"context"
+	"strings"
+	"sync/atomic"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/status"
+)
+
+// traceInfo is data used for recording traces.
+type traceInfo struct {
+	span         trace.Span
+	countSentMsg uint32
+	countRecvMsg uint32
+}
+
+// traceTagRPC populates context with a new span, and serializes information
+// about this span into gRPC Metadata.
+func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
+	// TODO: get consensus on whether this method name of "s.m" is correct.
+	mn := "Attempt." + strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
+	// Returned context is ignored because will populate context with data that
+	// wraps the span instead. Don't set span kind client on this attempt span
+	// to prevent backend from prepending span name with "Sent.".
+	tracer := otel.Tracer("grpc-open-telemetry")
+	_, span := tracer.Start(ctx, mn)
+
+	tcBin := Binary(span.SpanContext())
+	return stats.SetTrace(ctx, tcBin), &traceInfo{
+		span:         span,
+		countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
+		countRecvMsg: 0,
+	}
+}
+
+// traceTagRPC populates context with new span data, with a parent based on the
+// spanContext deserialized from context passed in (wire data in gRPC metadata)
+// if present.
+func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
+	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
+
+	var span trace.Span
+	// Returned context is ignored because will populate context with data
+	// that wraps the span instead.
+	tracer := otel.Tracer("grpc-open-telemetry")
+	// If the context.Context provided in `ctx` to tracer.Start(), contains a
+	// Span then the newly-created Span will be a child of that span,
+	// otherwise it will be a root span.
+	_, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindServer))
+
+	return ctx, &traceInfo{
+		span:         span,
+		countSentMsg: 0,
+		countRecvMsg: 0,
+	}
+}
+
+// populateSpan populates span information based on stats passed in (invariants
+// of the RPC lifecycle), and also ends span which triggers the span to be
+// exported.
+func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
+	if ti == nil || ti.span == nil {
+		// Shouldn't happen, tagRPC call comes before this function gets called
+		// which populates this information.
+		logger.Error("ctx passed into stats handler tracing event handling has no span present")
+		return
+	}
+	span := ti.span
+
+	switch rs := rs.(type) {
+	case *stats.Begin:
+		// Note: Go always added these attributes even though they are not
+		// defined by the OpenCensus gRPC spec. Thus, they are unimportant for
+		// correctness.
+		span.SetAttributes(
+			attribute.Bool("Client", rs.Client),
+			attribute.Bool("FailFast", rs.Client),
+		)
+	case *stats.PickerUpdated:
+		span.AddEvent("Delayed LB pick complete")
+	case *stats.InPayload:
+		// message id - "must be calculated as two different counters starting
+		// from one for sent messages and one for received messages."
+		mi := atomic.AddUint32(&ti.countRecvMsg, 1)
+		span.AddEvent("Inbound compressed message", trace.WithAttributes(
+			attribute.Int64("sequence-number", int64(mi)),
+			attribute.Int64("message-size", int64(rs.Length)),
+			attribute.Int64("message-size", int64(rs.CompressedLength)),
+			attribute.Int64("message-size-compressed", int64(rs.CompressedLength)),
+		))
+	case *stats.OutPayload:
+		mi := atomic.AddUint32(&ti.countSentMsg, 1)
+		span.AddEvent("Outbound compressed message", trace.WithAttributes(
+			attribute.Int64("sequence-number", int64(mi)),
+			attribute.Int64("message-size", int64(rs.Length)),
+			attribute.Int64("message-size", int64(rs.CompressedLength)),
+			attribute.Int64("message-size-compressed", int64(rs.CompressedLength)),
+		))
+	case *stats.End:
+		if rs.Error != nil {
+			// "The mapping between gRPC canonical codes and OpenCensus codes
+			// can be found here", which implies 1:1 mapping to gRPC statuses
+			// (OpenCensus statuses are based off gRPC statuses and a subset).
+			s := status.Convert(rs.Error)
+			span.SetStatus(otelcodes.Error, s.Message())
+		} else {
+			span.SetStatus(otelcodes.Ok, "Ok") // could get rid of this else conditional and just leave as 0 value, but this makes it explicit
+		}
+		span.End()
+	}
+}
