@@ -15,9 +15,11 @@ import (
 
 // traceInfo is data used for recording traces.
 type traceInfo struct {
-	span         trace.Span
-	countSentMsg uint32
-	countRecvMsg uint32
+	span                trace.Span
+	countSentMsg        uint32
+	countRecvMsg        uint32
+	previousRpcAttempts uint32
+	isTransparentRetry  bool
 }
 
 // traceTagRPC populates context with a new span, and serializes information
@@ -30,6 +32,9 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	// to prevent backend from prepending span name with "Sent.".
 	tracer := otel.Tracer("grpc-open-telemetry")
 	_, span := tracer.Start(ctx, mn)
+	if rti.NameResolutionDelay {
+		span.AddEvent("Delayed name resolution complete")
+	}
 
 	otel.GetTextMapPropagator().Inject(ctx, csh.options.TraceOptions.MapCarrier)
 
@@ -85,7 +90,11 @@ func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
 		span.SetAttributes(
 			attribute.Bool("Client", rs.Client),
 			attribute.Bool("FailFast", rs.Client),
+			attribute.Int64("previous-rpc-attempts", int64(ti.previousRpcAttempts)),
+			attribute.Bool("transparent-retry", ti.isTransparentRetry),
 		)
+		// increment previous rpc attempts applicable for next attempt
+		atomic.AddUint32(&ti.previousRpcAttempts, 1)
 	case *stats.PickerUpdated:
 		span.AddEvent("Delayed LB pick complete")
 	case *stats.InPayload:

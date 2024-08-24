@@ -400,7 +400,7 @@ func DefaultMetrics() *estats.Metrics {
 // TraceOptions are the tracing options for OpenTelemetry instrumentation.
 type TraceOptions struct {
 	// MapPropagotor is the propagator used for propagating cross-cutting
-	// concerns ask key-value pairs. gRPC Internally set it as
+	// concerns as key-value pairs. gRPC Internally set it as
 	// `GrpcTraceBinPropagator` that uses an optimization path to work
 	// around the lack of binary propagator API.
 	MapPropagotor propagation.TextMapPropagator
