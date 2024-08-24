@@ -33,6 +33,7 @@ import (
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -53,7 +54,7 @@ type Options struct {
 	// MetricsOptions are the metrics options for OpenTelemetry instrumentation.
 	MetricsOptions MetricsOptions
 
-	// TraceOptions are the tracing options for opencensus instrumentation.
+	// TraceOptions are the tracing options for OpenTelemetry instrumentation.
 	TraceOptions TraceOptions
 }
 
@@ -396,9 +397,24 @@ func DefaultMetrics() *estats.Metrics {
 	return defaultPerCallMetrics.Join(estats.DefaultMetrics)
 }
 
-// TraceOptions are the tracing options for opencensus instrumentation.
+// TraceOptions are the tracing options for OpenTelemetry instrumentation.
 type TraceOptions struct {
-	// DisableTrace determines whether traces are disabled for an OpenCensus
+	// MapPropagotor is the propagator used for propagating cross-cutting
+	// concerns ask key-value pairs. gRPC Internally set it as
+	// `GrpcTraceBinPropagator` that uses an optimization path to work
+	// around the lack of binary propagator API.
+	MapPropagotor propagation.TextMapPropagator
+
+	// MapCarrier is the storage medium used by a MapPropagator.
+	// gRPC internall set it as `internal.CustomCarrier` which
+	// supports both text and binary data.
+	MapCarrier propagation.TextMapCarrier
+
+	// TracerProvider provides Tracers that are used by instrumentation code to
+	// trace computational workflows.
+	TracerProvider trace.TracerProvider
+
+	// DisableTrace determines whether traces are disabled for an OpenTelemetry
 	// Dial or Server option. will overwrite any global option setting.
 	DisableTrace bool
 }

@@ -20,7 +20,7 @@ func (p GrpcTraceBinPropagator) Inject(ctx context.Context, carrier propagation.
 	}
 
 	binaryData := Binary(span.SpanContext())
-	if FromBinary == nil {
+	if binaryData == nil {
 		return
 	}
 

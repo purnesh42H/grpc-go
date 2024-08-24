@@ -46,8 +46,11 @@ func (c *CustomCarrier) SetBinary(key string, value []byte) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
-	// Set the raw binary value in the metadata using the -bin suffix
-	c.md[key+"-bin"] = []string{string(value)}
+	// Only support 'grpc-trace-bin' binary header.
+	if key == "grpc-trace-bin" {
+		// Set the raw binary value in the metadata
+		c.md[key] = []string{string(value)}
+	}
 }
 
 // GetBinary retrieves the binary value associated with the given key from the metadata.
@@ -55,8 +58,12 @@ func (c *CustomCarrier) GetBinary(key string) ([]byte, error) {
 	c.mtx.RLock()
 	defer c.mtx.RUnlock()
 
+	if key != "grpc-trace-bin" {
+		return nil, errors.New("only support 'grpc-trace-bin' binary header")
+	}
+
 	// Retrieve the binary data directly from metadata
-	values := c.md[key+"-bin"]
+	values := c.md[key]
 	if len(values) == 0 {
 		return nil, errors.New("key not found")
 	}

@@ -153,8 +153,12 @@ func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err er
 func (h *clientStatsHandler) createCallSpan(ctx context.Context, method string) (context.Context, trace.Span) {
 	var span trace.Span
 	if !h.options.TraceOptions.DisableTrace {
+		otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
+		otel.SetTextMapPropagator(h.options.TraceOptions.MapPropagotor)
+
 		mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
 		tracer := otel.Tracer("grpc-open-telemetry")
+
 		ctx, span = tracer.Start(ctx, mn, trace.WithSpanKind(trace.SpanKindClient))
 	}
 	return ctx, span

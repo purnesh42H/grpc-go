@@ -31,8 +31,9 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	tracer := otel.Tracer("grpc-open-telemetry")
 	_, span := tracer.Start(ctx, mn)
 
-	tcBin := Binary(span.SpanContext())
-	return stats.SetTrace(ctx, tcBin), &traceInfo{
+	otel.GetTextMapPropagator().Inject(ctx, csh.options.TraceOptions.MapCarrier)
+
+	return ctx, &traceInfo{
 		span:         span,
 		countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
 		countRecvMsg: 0,
@@ -49,6 +50,9 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	// Returned context is ignored because will populate context with data
 	// that wraps the span instead.
 	tracer := otel.Tracer("grpc-open-telemetry")
+
+	ctx = ssh.options.TraceOptions.MapPropagotor.Extract(ctx, ssh.options.TraceOptions.MapCarrier)
+
 	// If the context.Context provided in `ctx` to tracer.Start(), contains a
 	// Span then the newly-created Span will be a child of that span,
 	// otherwise it will be a root span.
