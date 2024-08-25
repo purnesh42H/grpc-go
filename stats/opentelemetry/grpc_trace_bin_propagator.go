@@ -9,7 +9,8 @@ import (
 	"google.golang.org/grpc/stats/opentelemetry/internal"
 )
 
-// CustomBinaryPropagator is a TextMapPropagator that propagates SpanContext in binary form.
+// CustomBinaryPropagator is a TextMapPropagator that propagates SpanContext
+// in binary form.
 type GrpcTraceBinPropagator struct{}
 
 // Inject inserts the trace context into the carrier as a binary header.

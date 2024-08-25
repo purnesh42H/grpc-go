@@ -9,7 +9,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	otelcodes "go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
+	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 	"google.golang.org/grpc/status"
 )
 
@@ -25,6 +27,10 @@ type traceInfo struct {
 // traceTagRPC populates context with a new span, and serializes information
 // about this span into gRPC Metadata.
 func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
+	md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		return ctx, nil
+	}
 	// TODO: get consensus on whether this method name of "s.m" is correct.
 	mn := "Attempt." + strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 	// Returned context is ignored because will populate context with data that
@@ -36,19 +42,26 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 		span.AddEvent("Delayed name resolution complete")
 	}
 
-	otel.GetTextMapPropagator().Inject(ctx, csh.options.TraceOptions.MapCarrier)
+	carrier := otelinternal.NewCustomCarrier(md) // Use internal custom carrier to inject
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
 
-	return ctx, &traceInfo{
-		span:         span,
-		countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
-		countRecvMsg: 0,
-	}
+	return metadata.NewOutgoingContext(ctx, carrier.Md), // Return a new context with the updated metadata
+		&traceInfo{
+			span:         span,
+			countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
+			countRecvMsg: 0,
+		}
 }
 
 // traceTagRPC populates context with new span data, with a parent based on the
 // spanContext deserialized from context passed in (wire data in gRPC metadata)
 // if present.
 func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ctx, nil
+	}
+
 	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 
 	var span trace.Span
@@ -56,7 +69,7 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	// that wraps the span instead.
 	tracer := otel.Tracer("grpc-open-telemetry")
 
-	ctx = ssh.options.TraceOptions.MapPropagotor.Extract(ctx, ssh.options.TraceOptions.MapCarrier)
+	ctx = otel.GetTextMapPropagator().Extract(ctx, otelinternal.NewCustomCarrier(md))
 
 	// If the context.Context provided in `ctx` to tracer.Start(), contains a
 	// Span then the newly-created Span will be a child of that span,

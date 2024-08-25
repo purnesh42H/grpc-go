@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/mem"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -91,18 +90,18 @@ type errProtoCodec struct {
 	decodingErr error
 }
 
-func (c *errProtoCodec) Marshal(v any) (mem.BufferSlice, error) {
+func (c *errProtoCodec) Marshal(v any) ([]byte, error) {
 	if c.encodingErr != nil {
 		return nil, c.encodingErr
 	}
-	return encoding.GetCodecV2(proto.Name).Marshal(v)
+	return encoding.GetCodec(proto.Name).Marshal(v)
 }
 
-func (c *errProtoCodec) Unmarshal(data mem.BufferSlice, v any) error {
+func (c *errProtoCodec) Unmarshal(data []byte, v any) error {
 	if c.decodingErr != nil {
 		return c.decodingErr
 	}
-	return encoding.GetCodecV2(proto.Name).Unmarshal(data, v)
+	return encoding.GetCodec(proto.Name).Unmarshal(data, v)
 }
 
 func (c *errProtoCodec) Name() string {
@@ -119,7 +118,7 @@ func (s) TestEncodeDoesntPanicOnServer(t *testing.T) {
 	ec := &errProtoCodec{name: t.Name(), encodingErr: encodingErr}
 
 	// Start a server with the above codec.
-	backend := stubserver.StartTestService(t, nil, grpc.ForceServerCodecV2(ec))
+	backend := stubserver.StartTestService(t, nil, grpc.ForceServerCodec(ec))
 	defer backend.Stop()
 
 	// Create a channel to the above server.
@@ -155,7 +154,7 @@ func (s) TestDecodeDoesntPanicOnServer(t *testing.T) {
 	ec := &errProtoCodec{name: t.Name(), decodingErr: decodingErr}
 
 	// Start a server with the above codec.
-	backend := stubserver.StartTestService(t, nil, grpc.ForceServerCodecV2(ec))
+	backend := stubserver.StartTestService(t, nil, grpc.ForceServerCodec(ec))
 	defer backend.Stop()
 
 	// Create a channel to the above server. Since we do not specify any codec
@@ -207,7 +206,7 @@ func (s) TestEncodeDoesntPanicOnClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
-	_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodecV2(ec))
+	_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(ec))
 	if err == nil || !strings.Contains(err.Error(), encodingErr.Error()) {
 		t.Fatalf("RPC failed with error: %v, want: %v", err, encodingErr)
 	}
@@ -215,7 +214,7 @@ func (s) TestEncodeDoesntPanicOnClient(t *testing.T) {
 	// Configure the codec on the client to not return errors anymore and expect
 	// the RPC to succeed.
 	ec.encodingErr = nil
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodecV2(ec)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(ec)); err != nil {
 		t.Fatalf("RPC failed with error: %v", err)
 	}
 }
@@ -243,7 +242,7 @@ func (s) TestDecodeDoesntPanicOnClient(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	client := testgrpc.NewTestServiceClient(cc)
-	_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodecV2(ec))
+	_, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(ec))
 	if err == nil || !strings.Contains(err.Error(), decodingErr.Error()) {
 		t.Fatalf("RPC failed with error: %v, want: %v", err, decodingErr)
 	}
@@ -251,7 +250,7 @@ func (s) TestDecodeDoesntPanicOnClient(t *testing.T) {
 	// Configure the codec on the client to not return errors anymore and expect
 	// the RPC to succeed.
 	ec.decodingErr = nil
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodecV2(ec)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(ec)); err != nil {
 		t.Fatalf("RPC failed with error: %v", err)
 	}
 }
@@ -266,14 +265,14 @@ type countingProtoCodec struct {
 	unmarshalCount int32
 }
 
-func (p *countingProtoCodec) Marshal(v any) (mem.BufferSlice, error) {
+func (p *countingProtoCodec) Marshal(v any) ([]byte, error) {
 	atomic.AddInt32(&p.marshalCount, 1)
-	return encoding.GetCodecV2(proto.Name).Marshal(v)
+	return encoding.GetCodec(proto.Name).Marshal(v)
 }
 
-func (p *countingProtoCodec) Unmarshal(data mem.BufferSlice, v any) error {
+func (p *countingProtoCodec) Unmarshal(data []byte, v any) error {
 	atomic.AddInt32(&p.unmarshalCount, 1)
-	return encoding.GetCodecV2(proto.Name).Unmarshal(data, v)
+	return encoding.GetCodec(proto.Name).Unmarshal(data, v)
 }
 
 func (p *countingProtoCodec) Name() string {
@@ -285,7 +284,7 @@ func (p *countingProtoCodec) Name() string {
 func (s) TestForceServerCodec(t *testing.T) {
 	// Create an server with the counting proto codec.
 	codec := &countingProtoCodec{name: t.Name()}
-	backend := stubserver.StartTestService(t, nil, grpc.ForceServerCodecV2(codec))
+	backend := stubserver.StartTestService(t, nil, grpc.ForceServerCodec(codec))
 	defer backend.Stop()
 
 	// Create a channel to the above server.
@@ -318,7 +317,7 @@ func (s) TestForceServerCodec(t *testing.T) {
 
 // renameProtoCodec wraps the proto codec and allows customizing the Name().
 type renameProtoCodec struct {
-	encoding.CodecV2
+	encoding.Codec
 	name string
 }
 
@@ -357,9 +356,9 @@ func (s) TestForceCodecName(t *testing.T) {
 
 	// Force the use of the custom codec on the client with the ForceCodec call
 	// option. Confirm the name is converted to lowercase before transmitting.
-	codec := &renameProtoCodec{CodecV2: encoding.GetCodecV2(proto.Name), name: t.Name()}
+	codec := &renameProtoCodec{Codec: encoding.GetCodec(proto.Name), name: t.Name()}
 	wantContentTypeCh <- []string{fmt.Sprintf("application/grpc+%s", strings.ToLower(t.Name()))}
-	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodecV2(codec)); err != nil {
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(codec)); err != nil {
 		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
 }

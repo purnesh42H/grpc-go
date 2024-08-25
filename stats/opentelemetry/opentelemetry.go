@@ -30,10 +30,10 @@ import (
 	"google.golang.org/grpc/internal"
 	otelinternal "google.golang.org/grpc/stats/opentelemetry/internal"
 
+	"go.opentelemetry.io/otel"
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -41,6 +41,7 @@ func init() {
 	otelinternal.SetPluginOption = func(o *Options, po otelinternal.PluginOption) {
 		o.MetricsOptions.pluginOption = po
 	}
+	otel.SetTextMapPropagator(GrpcTraceBinPropagator{})
 }
 
 var logger = grpclog.Component("otel-plugin")
@@ -399,17 +400,6 @@ func DefaultMetrics() *estats.Metrics {
 
 // TraceOptions are the tracing options for OpenTelemetry instrumentation.
 type TraceOptions struct {
-	// MapPropagotor is the propagator used for propagating cross-cutting
-	// concerns as key-value pairs. gRPC Internally set it as
-	// `GrpcTraceBinPropagator` that uses an optimization path to work
-	// around the lack of binary propagator API.
-	MapPropagotor propagation.TextMapPropagator
-
-	// MapCarrier is the storage medium used by a MapPropagator.
-	// gRPC internall set it as `internal.CustomCarrier` which
-	// supports both text and binary data.
-	MapCarrier propagation.TextMapCarrier
-
 	// TracerProvider provides Tracers that are used by instrumentation code to
 	// trace computational workflows.
 	TracerProvider trace.TracerProvider

@@ -26,7 +26,7 @@ import (
 )
 
 func (s) TestGetCodecForProtoIsNotNil(t *testing.T) {
-	if encoding.GetCodecV2(proto.Name) == nil {
+	if encoding.GetCodec(proto.Name) == nil {
 		t.Fatalf("encoding.GetCodec(%q) must not be nil by default", proto.Name)
 	}
 }
