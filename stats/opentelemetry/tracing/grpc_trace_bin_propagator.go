@@ -30,13 +30,13 @@ import (
 // GrpcTraceBinPropagator is TextMapPropagator to propagate cross-cutting
 // concerns as both text and binary key-value pairs within a carrier that
 // travels in-band across process boundaries.
-type GrpcTraceBinPropagator struct{}
+type GRPCTraceBinPropagator struct{}
 
 // Inject set cross-cutting concerns from the Context into the carrier.
 //
 // If carrier is carrier.CustomMapCarrier then SetBinary (fast path) is used,
 // otherwise Set (slow path) with encoding is used.
-func (p GrpcTraceBinPropagator) Inject(ctx context.Context, carrier propagation.TextMapCarrier) {
+func (p GRPCTraceBinPropagator) Inject(ctx context.Context, carrier propagation.TextMapCarrier) {
 	span := trace.SpanFromContext(ctx)
 	if !span.SpanContext().IsValid() {
 		return
@@ -58,7 +58,7 @@ func (p GrpcTraceBinPropagator) Inject(ctx context.Context, carrier propagation.
 //
 // If carrier is carrier.CustomMapCarrier then GetBinary (fast path) is used,
 // otherwise Get (slow path) with decoding is used.
-func (p GrpcTraceBinPropagator) Extract(ctx context.Context, carrier propagation.TextMapCarrier) context.Context {
+func (p GRPCTraceBinPropagator) Extract(ctx context.Context, carrier propagation.TextMapCarrier) context.Context {
 	var binaryData []byte
 
 	if customCarrier, ok := carrier.(otelinternaltracing.CustomMapCarrier); ok {
@@ -81,7 +81,7 @@ func (p GrpcTraceBinPropagator) Extract(ctx context.Context, carrier propagation
 // Fields returns the keys whose values are set with Inject.
 //
 // GrpcTraceBinPropagator will only have `grpc-trace-bin` field.
-func (p GrpcTraceBinPropagator) Fields() []string {
+func (p GRPCTraceBinPropagator) Fields() []string {
 	return []string{otelinternaltracing.GRPCTraceBinHeaderKey}
 }
 

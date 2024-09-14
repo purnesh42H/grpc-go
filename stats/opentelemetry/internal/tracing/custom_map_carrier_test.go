@@ -187,11 +187,11 @@ func (s) TestSetBinary(t *testing.T) {
 			c := NewCustomCarrier(tt.md)
 			c.SetBinary(tt.key, tt.value)
 			if tt.key == "grpc-trace-bin" {
-				if val := c.Md[tt.key][0]; val != string(tt.value) {
+				if val := c.MD[tt.key][0]; val != string(tt.value) {
 					t.Errorf("got %s, want %s", val, string(tt.value))
 				}
 			} else {
-				if _, ok := c.Md[tt.key]; ok {
+				if _, ok := c.MD[tt.key]; ok {
 					t.Errorf("wanted key %q to be ignored", tt.key)
 				}
 			}

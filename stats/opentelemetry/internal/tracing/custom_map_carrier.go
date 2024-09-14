@@ -34,20 +34,20 @@ const GRPCTraceBinHeaderKey = "grpc-trace-bin"
 type CustomMapCarrier struct {
 	propagation.TextMapCarrier
 	// MD is metadata.MD to store values in both string and binary format.
-	Md metadata.MD
+	MD metadata.MD
 }
 
 // NewCustomCarrier creates a new CustomMapCarrier with
 // embedded metadata.MD.
 func NewCustomCarrier(md metadata.MD) CustomMapCarrier {
 	return CustomMapCarrier{
-		Md: md,
+		MD: md,
 	}
 }
 
 // Get returns the string value associated with the passed key.
 func (c CustomMapCarrier) Get(key string) string {
-	values := c.Md[key]
+	values := c.MD[key]
 	if len(values) == 0 {
 		return ""
 	}
@@ -57,7 +57,7 @@ func (c CustomMapCarrier) Get(key string) string {
 
 // Set stores the key-value pair in string format.
 func (c CustomMapCarrier) Set(key, value string) {
-	c.Md.Set(key, value)
+	c.MD.Set(key, value)
 }
 
 // GetBinary returns the string value associated with the passed key,
@@ -68,7 +68,7 @@ func (c CustomMapCarrier) GetBinary(key string) ([]byte, error) {
 	}
 
 	// Retrieve the binary data directly from metadata
-	values := c.Md[key]
+	values := c.MD[key]
 	if len(values) == 0 {
 		return nil, errors.New("key not found")
 	}
@@ -82,14 +82,14 @@ func (c CustomMapCarrier) SetBinary(key string, value []byte) {
 	// Only support 'grpc-trace-bin' binary header.
 	if key == GRPCTraceBinHeaderKey {
 		// Set the raw binary value in the metadata
-		c.Md[key] = []string{string(value)}
+		c.MD[key] = []string{string(value)}
 	}
 }
 
 // Keys lists the keys stored in carriers metadata.MD.
 func (c CustomMapCarrier) Keys() []string {
-	keys := make([]string, 0, len(c.Md))
-	for k := range c.Md {
+	keys := make([]string, 0, len(c.MD))
+	for k := range c.MD {
 		keys = append(keys, k)
 	}
 	return keys

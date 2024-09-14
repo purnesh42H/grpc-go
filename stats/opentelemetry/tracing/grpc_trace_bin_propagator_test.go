@@ -39,7 +39,7 @@ func Test(t *testing.T) {
 }
 
 func (s) TestInject(t *testing.T) {
-	propagator := GrpcTraceBinPropagator{}
+	propagator := GRPCTraceBinPropagator{}
 	spanContext := trace.NewSpanContext(trace.SpanContextConfig{
 		TraceID:    [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 		SpanID:     [8]byte{17, 18, 19, 20, 21, 22, 23, 24},
@@ -75,7 +75,7 @@ func (s) TestInject(t *testing.T) {
 }
 
 func (s) TestExtract(t *testing.T) {
-	propagator := GrpcTraceBinPropagator{}
+	propagator := GRPCTraceBinPropagator{}
 	spanContext := trace.NewSpanContext(trace.SpanContextConfig{
 		TraceID:    [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
 		SpanID:     [8]byte{17, 18, 19, 20, 21, 22, 23, 24},
@@ -85,7 +85,7 @@ func (s) TestExtract(t *testing.T) {
 	binaryData := Binary(spanContext)
 
 	t.Run("fast path with CustomMapCarrier", func(t *testing.T) {
-		carrier := otelinternaltracing.CustomMapCarrier{Md: metadata.MD{
+		carrier := otelinternaltracing.CustomMapCarrier{MD: metadata.MD{
 			otelinternaltracing.GRPCTraceBinHeaderKey: []string{string(binaryData)},
 		}}
 		ctx := propagator.Extract(context.Background(), carrier)
