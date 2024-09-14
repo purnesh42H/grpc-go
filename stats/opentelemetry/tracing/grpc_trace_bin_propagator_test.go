@@ -48,7 +48,7 @@ func (s) TestInject(t *testing.T) {
 	ctx := trace.ContextWithSpanContext(context.Background(), spanContext)
 
 	t.Run("fast path with CustomMapCarrier", func(t *testing.T) {
-		carrier := otelinternaltracing.CustomMapCarrier{Md: metadata.MD{}}
+		carrier := otelinternaltracing.CustomMapCarrier{MD: metadata.MD{}}
 		propagator.Inject(ctx, carrier)
 
 		got, error := carrier.GetBinary(otelinternaltracing.GRPCTraceBinHeaderKey)

@@ -33,6 +33,7 @@ import (
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func init() {
@@ -51,6 +52,8 @@ var joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.Di
 type Options struct {
 	// MetricsOptions are the metrics options for OpenTelemetry instrumentation.
 	MetricsOptions MetricsOptions
+	// TraceOptions are the tracing options for OpenTelemetry instrumentation.
+	TraceOptions TraceOptions
 }
 
 // MetricsOptions are the metrics options for OpenTelemetry instrumentation.
@@ -82,6 +85,17 @@ type MetricsOptions struct {
 
 	// pluginOption is used to get labels to attach to certain metrics, if set.
 	pluginOption otelinternal.PluginOption
+}
+
+// TraceOptions are the tracing options for OpenTelemetry instrumentation.
+type TraceOptions struct {
+	// TracerProvider provides Tracers that are used by instrumentation code to
+	// trace computational workflows.
+	TracerProvider trace.TracerProvider
+
+	// DisableTrace determines whether traces are disabled for an OpenTelemetry
+	// Dial or Server option.
+	DisableTrace bool
 }
 
 // DialOption returns a dial option which enables OpenTelemetry instrumentation
@@ -181,6 +195,8 @@ type attemptInfo struct {
 
 	pluginOptionLabels map[string]string // pluginOptionLabels to attach to metrics emitted
 	xdsLabels          map[string]string
+
+	ti *traceInfo
 }
 
 type clientMetrics struct {
