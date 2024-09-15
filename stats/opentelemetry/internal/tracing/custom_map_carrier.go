@@ -27,6 +27,8 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+const GRPCTraceBinHeaderKey = "grpc-trace-bin"
+
 // CustomMapCarrier is a TextMapCarrier that uses metadata.MD held in memory
 // as a storage medium for propagated key-value pairs in both text and binary.
 type CustomMapCarrier struct {
@@ -61,7 +63,7 @@ func (c CustomMapCarrier) Set(key, value string) {
 // GetBinary returns the string value associated with the passed key,
 // only if the passed key is `grpc-trace-bin`.
 func (c CustomMapCarrier) GetBinary(key string) ([]byte, error) {
-	if key != GrpcTraceBinHeaderKey {
+	if key != GRPCTraceBinHeaderKey {
 		return nil, errors.New("only support 'grpc-trace-bin' binary header")
 	}
 
@@ -78,7 +80,7 @@ func (c CustomMapCarrier) GetBinary(key string) ([]byte, error) {
 // only if passed key is `grpc-trace-bin`.
 func (c CustomMapCarrier) SetBinary(key string, value []byte) {
 	// Only support 'grpc-trace-bin' binary header.
-	if key == GrpcTraceBinHeaderKey {
+	if key == GRPCTraceBinHeaderKey {
 		// Set the raw binary value in the metadata
 		c.Md[key] = []string{string(value)}
 	}

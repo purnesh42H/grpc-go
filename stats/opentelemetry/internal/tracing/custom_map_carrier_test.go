@@ -22,8 +22,17 @@ import (
 	"errors"
 	"testing"
 
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 func (s) TestGet(t *testing.T) {
 	tests := []struct {

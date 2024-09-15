@@ -27,6 +27,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
+	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
 
 type s struct {
@@ -47,10 +48,10 @@ func (s) TestInject(t *testing.T) {
 	ctx := trace.ContextWithSpanContext(context.Background(), spanContext)
 
 	t.Run("fast path with CustomMapCarrier", func(t *testing.T) {
-		carrier := CustomMapCarrier{Md: metadata.MD{}}
+		carrier := otelinternaltracing.CustomMapCarrier{Md: metadata.MD{}}
 		propagator.Inject(ctx, carrier)
 
-		got, error := carrier.GetBinary(GrpcTraceBinHeaderKey)
+		got, error := carrier.GetBinary(otelinternaltracing.GRPCTraceBinHeaderKey)
 		if error != nil {
 			t.Fatalf("got non-nil error, want no error")
 		}
@@ -65,7 +66,7 @@ func (s) TestInject(t *testing.T) {
 		carrier := propagation.MapCarrier{}
 		propagator.Inject(ctx, carrier)
 
-		got := carrier.Get(GrpcTraceBinHeaderKey)
+		got := carrier.Get(otelinternaltracing.GRPCTraceBinHeaderKey)
 		want := base64.StdEncoding.EncodeToString(Binary(spanContext))
 		if got != want {
 			t.Errorf("got = %v, want %v", got, want)
@@ -84,8 +85,8 @@ func (s) TestExtract(t *testing.T) {
 	binaryData := Binary(spanContext)
 
 	t.Run("fast path with CustomMapCarrier", func(t *testing.T) {
-		carrier := CustomMapCarrier{Md: metadata.MD{
-			GrpcTraceBinHeaderKey: []string{string(binaryData)},
+		carrier := otelinternaltracing.CustomMapCarrier{Md: metadata.MD{
+			otelinternaltracing.GRPCTraceBinHeaderKey: []string{string(binaryData)},
 		}}
 		ctx := propagator.Extract(context.Background(), carrier)
 		got := trace.SpanContextFromContext(ctx)
@@ -97,7 +98,7 @@ func (s) TestExtract(t *testing.T) {
 
 	t.Run("slow path with TextMapCarrier", func(t *testing.T) {
 		carrier := propagation.MapCarrier{
-			GrpcTraceBinHeaderKey: base64.StdEncoding.EncodeToString(binaryData),
+			otelinternaltracing.GRPCTraceBinHeaderKey: base64.StdEncoding.EncodeToString(binaryData),
 		}
 		ctx := propagator.Extract(context.Background(), carrier)
 		got := trace.SpanContextFromContext(ctx)

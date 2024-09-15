@@ -24,9 +24,8 @@ import (
 
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
+	otelinternaltracing "google.golang.org/grpc/stats/opentelemetry/internal/tracing"
 )
-
-const GrpcTraceBinHeaderKey = "grpc-trace-bin"
 
 // GrpcTraceBinPropagator is TextMapPropagator to propagate cross-cutting
 // concerns as both text and binary key-value pairs within a carrier that
@@ -48,10 +47,10 @@ func (p GrpcTraceBinPropagator) Inject(ctx context.Context, carrier propagation.
 		return
 	}
 
-	if customCarrier, ok := carrier.(CustomMapCarrier); ok {
-		customCarrier.SetBinary(GrpcTraceBinHeaderKey, binaryData) // fast path: set the binary data without encoding
+	if customCarrier, ok := carrier.(otelinternaltracing.CustomMapCarrier); ok {
+		customCarrier.SetBinary(otelinternaltracing.GRPCTraceBinHeaderKey, binaryData) // fast path: set the binary data without encoding
 	} else {
-		carrier.Set(GrpcTraceBinHeaderKey, base64.StdEncoding.EncodeToString(binaryData)) // slow path: set the binary data with encoding
+		carrier.Set(otelinternaltracing.GRPCTraceBinHeaderKey, base64.StdEncoding.EncodeToString(binaryData)) // slow path: set the binary data with encoding
 	}
 }
 
@@ -62,10 +61,10 @@ func (p GrpcTraceBinPropagator) Inject(ctx context.Context, carrier propagation.
 func (p GrpcTraceBinPropagator) Extract(ctx context.Context, carrier propagation.TextMapCarrier) context.Context {
 	var binaryData []byte
 
-	if customCarrier, ok := carrier.(CustomMapCarrier); ok {
-		binaryData, _ = customCarrier.GetBinary(GrpcTraceBinHeaderKey)
+	if customCarrier, ok := carrier.(otelinternaltracing.CustomMapCarrier); ok {
+		binaryData, _ = customCarrier.GetBinary(otelinternaltracing.GRPCTraceBinHeaderKey)
 	} else {
-		binaryData, _ = base64.StdEncoding.DecodeString(carrier.Get(GrpcTraceBinHeaderKey))
+		binaryData, _ = base64.StdEncoding.DecodeString(carrier.Get(otelinternaltracing.GRPCTraceBinHeaderKey))
 	}
 	if binaryData == nil {
 		return ctx
@@ -83,7 +82,7 @@ func (p GrpcTraceBinPropagator) Extract(ctx context.Context, carrier propagation
 //
 // GrpcTraceBinPropagator will only have `grpc-trace-bin` field.
 func (p GrpcTraceBinPropagator) Fields() []string {
-	return []string{GrpcTraceBinHeaderKey}
+	return []string{otelinternaltracing.GRPCTraceBinHeaderKey}
 }
 
 // Binary returns the binary format representation of a SpanContext.
