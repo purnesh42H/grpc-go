@@ -27,6 +27,10 @@ type traceInfo struct {
 // traceTagRPC populates context with a new span, and serializes information
 // about this span into gRPC Metadata.
 func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
+	if csh.options.TraceOptions.TextMapPropagator == nil {
+		return ctx, nil
+	}
+
 	md, ok := metadata.FromOutgoingContext(ctx)
 	if !ok {
 		return ctx, nil
@@ -55,6 +59,10 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 // spanContext deserialized from context passed in (wire data in gRPC metadata)
 // if present.
 func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
+	if ssh.options.TraceOptions.TextMapPropagator == nil {
+		return ctx, nil
+	}
+
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return ctx, nil

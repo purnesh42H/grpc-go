@@ -33,6 +33,7 @@ import (
 	otelattribute "go.opentelemetry.io/otel/attribute"
 	otelmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -92,6 +93,9 @@ type TraceOptions struct {
 	// TracerProvider provides Tracers that are used by instrumentation code to
 	// trace computational workflows.
 	TracerProvider trace.TracerProvider
+
+	// TextMapPropagator propagates span context through text map carrier.
+	TextMapPropagator propagation.TextMapPropagator
 
 	// DisableTrace determines whether traces are disabled for an OpenTelemetry
 	// Dial or Server option.

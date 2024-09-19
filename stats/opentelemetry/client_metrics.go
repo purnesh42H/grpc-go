@@ -71,6 +71,11 @@ func (h *clientStatsHandler) initializeMetrics() {
 	}
 	h.MetricsRecorder = rm
 	rm.registerMetrics(metrics, meter)
+
+	if !h.options.TraceOptions.DisableTrace {
+		otel.SetTextMapPropagator(h.options.TraceOptions.TextMapPropagator)
+		otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
+	}
 }
 
 func (h *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
@@ -158,8 +163,6 @@ func (h *clientStatsHandler) perCallTracesAndMetrics(ctx context.Context, err er
 func (h *clientStatsHandler) createCallSpan(ctx context.Context, method string) (context.Context, trace.Span) {
 	var span trace.Span
 	if !h.options.TraceOptions.DisableTrace {
-		otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
-
 		mn := strings.Replace(removeLeadingSlash(method), "/", ".", -1)
 		tracer := otel.Tracer("grpc-open-telemetry")
 
