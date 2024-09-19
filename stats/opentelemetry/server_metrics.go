@@ -66,7 +66,10 @@ func (h *serverStatsHandler) initializeMetrics() {
 	h.MetricsRecorder = rm
 	rm.registerMetrics(metrics, meter)
 
-	otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
+	if !h.options.TraceOptions.DisableTrace {
+		otel.SetTextMapPropagator(h.options.TraceOptions.TextMapPropagator)
+		otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
+	}
 }
 
 // attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the
