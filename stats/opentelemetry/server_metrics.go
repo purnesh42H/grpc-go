@@ -65,11 +65,17 @@ func (h *serverStatsHandler) initializeMetrics() {
 	}
 	h.MetricsRecorder = rm
 	rm.registerMetrics(metrics, meter)
+}
 
-	if !h.options.TraceOptions.DisableTrace {
-		otel.SetTextMapPropagator(h.options.TraceOptions.TextMapPropagator)
-		otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
+func (h *serverStatsHandler) initializeTracing() {
+	// Will set no metrics to record, logically making this stats handler a
+	// no-op.
+	if !isTracingDisabled(h.options.TraceOptions) {
+		return
 	}
+
+	otel.SetTextMapPropagator(h.options.TraceOptions.TextMapPropagator)
+	otel.SetTracerProvider(h.options.TraceOptions.TracerProvider)
 }
 
 // attachLabelsTransportStream intercepts SetHeader and SendHeader calls of the
@@ -204,7 +210,7 @@ func (h *serverStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo)
 	}
 
 	var ti *traceInfo
-	if !h.options.TraceOptions.DisableTrace {
+	if !isTracingDisabled(h.options.TraceOptions) {
 		ctx, ti = h.traceTagRPC(ctx, info)
 	}
 	ai := &attemptInfo{
@@ -225,10 +231,12 @@ func (h *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
 		logger.Error("ctx passed into server side stats handler metrics event handling has no server call data present")
 		return
 	}
-	if !h.options.TraceOptions.DisableTrace {
+	if !isTracingDisabled(h.options.TraceOptions) {
 		populateSpan(ctx, rs, ri.ai.ti)
 	}
-	h.processRPCData(ctx, rs, ri.ai)
+	if !isMetricsDisabled(h.options.MetricsOptions) {
+		h.processRPCData(ctx, rs, ri.ai)
+	}
 }
 
 func (h *serverStatsHandler) processRPCData(ctx context.Context, s stats.RPCStats, ai *attemptInfo) {

@@ -96,10 +96,6 @@ type TraceOptions struct {
 
 	// TextMapPropagator propagates span context through text map carrier.
 	TextMapPropagator propagation.TextMapPropagator
-
-	// DisableTrace determines whether traces are disabled for an OpenTelemetry
-	// Dial or Server option.
-	DisableTrace bool
 }
 
 // DialOption returns a dial option which enables OpenTelemetry instrumentation
@@ -117,6 +113,7 @@ type TraceOptions struct {
 func DialOption(o Options) grpc.DialOption {
 	csh := &clientStatsHandler{options: o}
 	csh.initializeMetrics()
+	csh.initializeTracing()
 	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 }
 
@@ -137,6 +134,7 @@ var joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) g
 func ServerOption(o Options) grpc.ServerOption {
 	ssh := &serverStatsHandler{options: o}
 	ssh.initializeMetrics()
+	ssh.initializeTracing()
 	return joinServerOptions(grpc.ChainUnaryInterceptor(ssh.unaryInterceptor), grpc.ChainStreamInterceptor(ssh.streamInterceptor), grpc.StatsHandler(ssh))
 }
 
@@ -181,6 +179,14 @@ func getRPCInfo(ctx context.Context) *rpcInfo {
 
 func removeLeadingSlash(mn string) string {
 	return strings.TrimLeft(mn, "/")
+}
+
+func isMetricsDisabled(mo MetricsOptions) bool {
+	return mo.MeterProvider == nil
+}
+
+func isTracingDisabled(to TraceOptions) bool {
+	return to.TracerProvider == nil || to.TextMapPropagator == nil
 }
 
 // attemptInfo is RPC information scoped to the RPC attempt life span client
