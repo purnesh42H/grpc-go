@@ -132,29 +132,6 @@ func (scs *ServerConfigs) String() string {
 	return ret
 }
 
-// Authority contains configuration for an xDS control plane authority.
-//
-// This type does not implement custom JSON marshal/unmarshal logic because it
-// is straightforward to accomplish the same with json struct tags.
-type Authority struct {
-	// ClientListenerResourceNameTemplate is template for the name of the
-	// Listener resource to subscribe to for a gRPC client channel.  Used only
-	// when the channel is created using an "xds:" URI with this authority name.
-	//
-	// The token "%s", if present in this string, will be replaced
-	// with %-encoded service authority (i.e., the path part of the target
-	// URI used to create the gRPC channel).
-	//
-	// Must start with "xdstp://<authority_name>/".  If it does not,
-	// that is considered a bootstrap file parsing error.
-	//
-	// If not present in the bootstrap file, defaults to
-	// "xdstp://<authority_name>/envoy.config.listener.v3.Listener/%s".
-	ClientListenerResourceNameTemplate string `json:"client_listener_resource_name_template,omitempty"`
-	// XDSServers contains the list of server configurations for this authority.
-	XDSServers ServerConfigs `json:"xds_servers,omitempty"`
-}
-
 // Equal returns true if a equals other.
 func (a *Authority) Equal(other *Authority) bool {
 	switch {
@@ -172,10 +149,9 @@ func (a *Authority) Equal(other *Authority) bool {
 
 // ServerConfig contains the configuration to connect to a server.
 type ServerConfig struct {
-	serverURI      string
-	channelCreds   []ChannelCreds
-	serverFeatures []string
+	*bootstrap.ServerConfig
 
+	serverFeatures []string
 	// As part of unmarshalling the JSON config into this struct, we ensure that
 	// the credentials config is valid by building an instance of the specified
 	// credentials and store it here for easy access.
@@ -369,13 +345,9 @@ func ServerConfigForTesting(opts ServerConfigTestingOptions) (*ServerConfig, err
 // Config is the internal representation of the bootstrap configuration provided
 // to the xDS client.
 type Config struct {
-	xDSServers                                ServerConfigs
-	cpcs                                      map[string]certproviderNameAndConfig
-	serverListenerResourceNameTemplate        string
-	clientDefaultListenerResourceNameTemplate string
-	authorities                               map[string]*Authority
-	node                                      node
+	*bootstrap.Config // Embedding the generic Config
 
+	cpcs map[string]certproviderNameAndConfig
 	// A map from certprovider instance names to parsed buildable configs.
 	certProviderConfigs map[string]*certprovider.BuildableConfig
 }
@@ -706,13 +678,6 @@ type certproviderNameAndConfig struct {
 	Config     json.RawMessage `json:"config"`
 }
 
-// locality is the internal representation of the locality field within node.
-type locality struct {
-	Region  string `json:"region,omitempty"`
-	Zone    string `json:"zone,omitempty"`
-	SubZone string `json:"sub_zone,omitempty"`
-}
-
 func (l locality) Equal(other locality) bool {
 	return l.Region == other.Region && l.Zone == other.Zone && l.SubZone == other.SubZone
 }
@@ -728,10 +693,7 @@ type userAgentVersion struct {
 // node is the internal representation of the node field in the bootstrap
 // configuration.
 type node struct {
-	ID       string           `json:"id,omitempty"`
-	Cluster  string           `json:"cluster,omitempty"`
-	Locality locality         `json:"locality,omitempty"`
-	Metadata *structpb.Struct `json:"metadata,omitempty"`
+	*bootstrap.Node
 
 	// The following fields are controlled by the client implementation and
 	// should not unmarshaled from JSON.
