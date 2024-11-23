@@ -1,5 +1,4 @@
 /*
- *
  * Copyright 2024 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,13 +12,16 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-// Package internal contains functionality internal to the transport package.
-package internal
+syntax = "proto3";
 
-// The following vars can be overridden by tests.
-var (
-	// GRPCNewClient creates a new gRPC Client.
-	GRPCNewClient any // func(string, ...grpc.DialOption) (*grpc.ClientConn, error)
-)
+package grpc.testdata.grpc_testing_not_regenerated;
+
+option go_package = "google.golang.org/grpc/testdata/grpc_testing_not_regenerated";
+
+// SimpleMessage is used to hold string data.
+message SimpleMessage {
+  string data = 1;
+}
