@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/clients"
 	"google.golang.org/grpc/xds/clients/xdsclient/xdsresource"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -122,10 +123,10 @@ type streamImpl struct {
 
 	// The following fields are initialized in the constructor and are not
 	// written to afterwards, and hence can be accessed without a mutex.
-	streamCh     chan clients.Stream[clients.StreamRequest, any] // New ADS streams are pushed here.
-	requestCh    *buffer.Unbounded                               // Subscriptions and unsubscriptions are pushed here.
-	runnerDoneCh chan struct{}                                   // Notify completion of runner goroutine.
-	cancel       context.CancelFunc                              // To cancel the context passed to the runner goroutine.
+	streamCh     chan clients.Stream[[]byte, any] // New ADS streams are pushed here.
+	requestCh    *buffer.Unbounded                // Subscriptions and unsubscriptions are pushed here.
+	runnerDoneCh chan struct{}                    // Notify completion of runner goroutine.
+	cancel       context.CancelFunc               // To cancel the context passed to the runner goroutine.
 
 	// Guards access to the below fields (and to the contents of the map).
 	mu                sync.Mutex
@@ -155,7 +156,7 @@ func newStreamImpl(opts streamOpts) *streamImpl {
 		nodeProto:          opts.nodeProto,
 		watchExpiryTimeout: opts.watchExpiryTimeout,
 
-		streamCh:          make(chan clients.Stream[clients.StreamRequest, any], 1),
+		streamCh:          make(chan clients.Stream[[]byte, any], 1),
 		requestCh:         buffer.NewUnbounded(),
 		runnerDoneCh:      make(chan struct{}),
 		resourceTypeState: make(map[ResourceType]*resourceTypeState),
@@ -293,7 +294,7 @@ func (s *streamImpl) runner(ctx context.Context) {
 // - a new stream is created after the previous one failed
 func (s *streamImpl) send(ctx context.Context) {
 	// Stores the most recent stream instance received on streamCh.
-	var stream clients.Stream[clients.StreamRequest, any]
+	var stream clients.Stream[[]byte, any]
 	for {
 		select {
 		case <-ctx.Done():
@@ -325,7 +326,7 @@ func (s *streamImpl) send(ctx context.Context) {
 // and will be sent later. This method also starts the watch expiry timer for
 // resources that were sent in the request for the first time, i.e. their watch
 // state is `watchStateStarted`.
-func (s *streamImpl) sendNew(stream clients.Stream[clients.StreamRequest, any], typ ResourceType) error {
+func (s *streamImpl) sendNew(stream clients.Stream[[]byte, any], typ ResourceType) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -356,7 +357,7 @@ func (s *streamImpl) sendNew(stream clients.Stream[clients.StreamRequest, any], 
 // recovering from a broken stream.
 //
 // The stream argument is guaranteed to be non-nil.
-func (s *streamImpl) sendExisting(stream clients.Stream[clients.StreamRequest, any]) error {
+func (s *streamImpl) sendExisting(stream clients.Stream[[]byte, any]) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -391,7 +392,7 @@ func (s *streamImpl) sendExisting(stream clients.Stream[clients.StreamRequest, a
 // received response was not yet complete.
 //
 // The stream argument is guaranteed to be non-nil.
-func (s *streamImpl) sendBuffered(stream clients.Stream[clients.StreamRequest, any]) error {
+func (s *streamImpl) sendBuffered(stream clients.Stream[[]byte, any]) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -416,7 +417,7 @@ func (s *streamImpl) sendBuffered(stream clients.Stream[clients.StreamRequest, a
 // watch timers are started for the resources in the request.
 //
 // Caller needs to hold c.mu.
-func (s *streamImpl) sendMessageIfWritePendingLocked(stream clients.Stream[clients.StreamRequest, any], typ ResourceType, state *resourceTypeState) error {
+func (s *streamImpl) sendMessageIfWritePendingLocked(stream clients.Stream[[]byte, any], typ ResourceType, state *resourceTypeState) error {
 	if !state.pendingWrite {
 		if s.logger.V(2) {
 			s.logger.Infof("Skipping sending request for type %q, because all subscribed resources were already sent", typ.TypeURL())
@@ -446,7 +447,7 @@ func (s *streamImpl) sendMessageIfWritePendingLocked(stream clients.Stream[clien
 // error if the request could not be sent.
 //
 // Caller needs to hold c.mu.
-func (s *streamImpl) sendMessageLocked(stream clients.Stream[clients.StreamRequest, any], names []string, url, version, nonce string, nackErr error) error {
+func (s *streamImpl) sendMessageLocked(stream clients.Stream[[]byte, any], names []string, url, version, nonce string, nackErr error) error {
 	req := &v3discoverypb.DiscoveryRequest{
 		ResourceNames: names,
 		TypeUrl:       url,
@@ -467,7 +468,12 @@ func (s *streamImpl) sendMessageLocked(stream clients.Stream[clients.StreamReque
 		}
 	}
 
-	if err := stream.Send(req); err != nil {
+	reqBytes, err := proto.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	if err := stream.Send(reqBytes); err != nil {
 		s.logger.Warningf("Sending ADS request for type %q, resources: %v, version: %q, nonce: %q failed: %v", url, names, version, nonce, err)
 		return err
 	}
@@ -494,7 +500,7 @@ func (s *streamImpl) sendMessageLocked(stream clients.Stream[clients.StreamReque
 //
 // It returns a boolean indicating whether at least one message was received
 // from the server.
-func (s *streamImpl) recv(ctx context.Context, stream clients.Stream[clients.StreamRequest, any]) bool {
+func (s *streamImpl) recv(ctx context.Context, stream clients.Stream[[]byte, any]) bool {
 	msgReceived := false
 	for {
 		// Wait for ADS stream level flow control to be available, and send out
@@ -545,7 +551,7 @@ func (s *streamImpl) recv(ctx context.Context, stream clients.Stream[clients.Str
 	}
 }
 
-func (s *streamImpl) recvMessage(stream clients.Stream[clients.StreamRequest, any]) (resources []*anypb.Any, url, version, nonce string, err error) {
+func (s *streamImpl) recvMessage(stream clients.Stream[[]byte, any]) (resources []*anypb.Any, url, version, nonce string, err error) {
 	r, err := stream.Recv()
 	if err != nil {
 		return nil, "", "", "", err
@@ -571,7 +577,7 @@ func (s *streamImpl) recvMessage(stream clients.Stream[clients.StreamRequest, an
 //   - updates resource type specific state
 //   - updates resource specific state for resources in the response
 //   - sends an ACK or NACK to the server based on the response
-func (s *streamImpl) onRecv(stream clients.Stream[clients.StreamRequest, any], names []string, url, version, nonce string, nackErr error) {
+func (s *streamImpl) onRecv(stream clients.Stream[[]byte, any], names []string, url, version, nonce string, nackErr error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
