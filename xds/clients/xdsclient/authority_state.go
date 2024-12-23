@@ -193,7 +193,7 @@ func (a *authorityState) handleADSStreamFailure(serverConfig *clients.ServerConf
 			for watcher := range state.watchers {
 				watcher := watcher
 				a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
-					watcher.OnError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err), func() {})
+					watcher.OnAmbientError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err), func() {})
 				})
 			}
 		}
@@ -362,7 +362,7 @@ func (a *authorityState) handleADSResourceUpdate(serverConfig *clients.ServerCon
 				watcher := watcher
 				err := uErr.err
 				watcherCnt.Add(1)
-				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.OnError(err, done) })
+				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.OnAmbientError(err, done) })
 			}
 			continue
 		}
@@ -387,7 +387,7 @@ func (a *authorityState) handleADSResourceUpdate(serverConfig *clients.ServerCon
 				watcher := watcher
 				resource := uErr.resource
 				watcherCnt.Add(1)
-				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.OnUpdate(resource, done) })
+				funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.OnResourceChanged(resource, nil, done) })
 			}
 		}
 
@@ -464,7 +464,9 @@ func (a *authorityState) handleADSResourceUpdate(serverConfig *clients.ServerCon
 		for watcher := range state.watchers {
 			watcher := watcher
 			watcherCnt.Add(1)
-			funcsToSchedule = append(funcsToSchedule, func(context.Context) { watcher.OnResourceDoesNotExist(done) })
+			funcsToSchedule = append(funcsToSchedule, func(context.Context) {
+				watcher.OnResourceChanged(nil, xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource not found in received response"), done)
+			})
 		}
 	}
 }
@@ -506,7 +508,9 @@ func (a *authorityState) handleADSResourceDoesNotExist(rType ResourceType, resou
 	state.md = updateMetadata{status: serviceStatusNotExist}
 	for watcher := range state.watchers {
 		watcher := watcher
-		a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist(func() {}) })
+		a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
+			watcher.OnResourceChanged(nil, xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource not found in received response"), func() {})
+		})
 	}
 }
 
@@ -639,7 +643,7 @@ func (a *authorityState) watchResource(rType ResourceType, resourceName string, 
 				a.logger.Infof("Resource type %q with resource name %q found in cache: %v", rType.TypeName(), resourceName, state.cache)
 			}
 			resource := state.cache
-			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnUpdate(resource, func() {}) })
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnResourceChanged(resource, nil, func() {}) })
 		}
 		// If last update was NACK'd, notify the new watcher of error
 		// immediately as well.
@@ -647,12 +651,14 @@ func (a *authorityState) watchResource(rType ResourceType, resourceName string, 
 			if a.logger.V(2) {
 				a.logger.Infof("Resource type %q with resource name %q was NACKed: %v", rType.TypeName(), resourceName, state.cache)
 			}
-			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnError(state.md.errState.err, func() {}) })
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnAmbientError(state.md.errState.err, func() {}) })
 		}
 		// If the metadata field is updated to indicate that the management
 		// server does not have this resource, notify the new watcher.
 		if state.md.status == serviceStatusNotExist {
-			a.watcherCallbackSerializer.TrySchedule(func(context.Context) { watcher.OnResourceDoesNotExist(func() {}) })
+			a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
+				watcher.OnResourceChanged(nil, xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource not found in received response"), func() {})
+			})
 		}
 		cleanup = a.unwatchResource(rType, resourceName, watcher)
 	}, func() {

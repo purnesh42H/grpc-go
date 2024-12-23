@@ -12,7 +12,6 @@ import (
 	"google.golang.org/grpc/xds/clients"
 	"google.golang.org/grpc/xds/clients/grpctransport"
 	"google.golang.org/grpc/xds/clients/xdsclient"
-	"google.golang.org/grpc/xds/clients/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/clients/xdsclient/xdsresource/version"
 )
 
@@ -29,22 +28,22 @@ func newListenerWatcher() *listenerWatcher {
 	return &listenerWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (lw *listenerWatcher) OnUpdate(update xdsclient.ResourceData, onDone xdsclient.OnResourceProcessed) {
+func (lw *listenerWatcher) OnResourceChanged(update xdsclient.ResourceData, err error, onDone xdsclient.OnResourceProcessed) {
+	if err != nil {
+		lw.updateCh.Send(listenerUpdate{err: err})
+		onDone()
+		return
+	}
 	lw.updateCh.Send(listenerUpdate{update: update.Raw()})
 	onDone()
 }
 
-func (lw *listenerWatcher) OnError(err error, onDone xdsclient.OnResourceProcessed) {
+func (lw *listenerWatcher) OnAmbientError(err error, onDone xdsclient.OnResourceProcessed) {
 	// When used with a go-control-plane management server that continuously
 	// resends resources which are NACKed by the xDS client, using a `Replace()`
 	// here and in OnResourceDoesNotExist() simplifies tests which will have
 	// access to the most recently received error.
 	lw.updateCh.Replace(listenerUpdate{err: err})
-	onDone()
-}
-
-func (lw *listenerWatcher) OnResourceDoesNotExist(onDone xdsclient.OnResourceProcessed) {
-	lw.updateCh.Replace(listenerUpdate{err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Listener not found in received response")})
 	onDone()
 }
 

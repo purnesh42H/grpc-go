@@ -86,7 +86,7 @@ func (c *XDSClient) WatchResource(rTypeUrl string, resourceName string, watcher 
 	if rType, ok := c.resourceTypes[rTypeUrl]; !ok {
 		logger.Warningf("Watch registered for name %q of type %q, but resource type implementation is not present", rType.TypeName(), resourceName)
 		c.serializer.TrySchedule(func(context.Context) {
-			watcher.OnError(fmt.Errorf("resource type %q not found in provided resource type implementations", rType.TypeURL()), func() {})
+			watcher.OnAmbientError(fmt.Errorf("resource type %q not found in provided resource type implementations", rType.TypeURL()), func() {})
 		})
 		return func() {}
 	}
@@ -96,7 +96,7 @@ func (c *XDSClient) WatchResource(rTypeUrl string, resourceName string, watcher 
 	if a == nil {
 		logger.Warningf("Watch registered for name %q of type %q, authority %q is not found", rType.TypeName(), resourceName, n.Authority)
 		c.serializer.TrySchedule(func(context.Context) {
-			watcher.OnError(fmt.Errorf("authority %q not found in bootstrap config for resource %q", n.Authority, resourceName), func() {})
+			watcher.OnAmbientError(fmt.Errorf("authority %q not found in bootstrap config for resource %q", n.Authority, resourceName), func() {})
 		})
 		return func() {}
 	}
