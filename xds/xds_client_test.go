@@ -28,13 +28,13 @@ func newListenerWatcher() *listenerWatcher {
 	return &listenerWatcher{updateCh: testutils.NewChannel()}
 }
 
-func (lw *listenerWatcher) OnResourceChanged(update xdsclient.ResourceData, err error, onDone xdsclient.OnResourceProcessed) {
-	if err != nil {
-		lw.updateCh.Send(listenerUpdate{err: err})
+func (lw *listenerWatcher) OnResourceChanged(update xdsclient.ResourceDataOrError, onDone xdsclient.OnResourceProcessed) {
+	if update.Err != nil {
+		lw.updateCh.Send(listenerUpdate{err: update.Err})
 		onDone()
 		return
 	}
-	lw.updateCh.Send(listenerUpdate{update: update.Raw()})
+	lw.updateCh.Send(listenerUpdate{update: update.Data.Raw()})
 	onDone()
 }
 

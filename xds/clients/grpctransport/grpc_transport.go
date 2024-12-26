@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/xds/clients"
-	"google.golang.org/protobuf/proto"
 )
 
 // ServerConfigExtension is an interface to extend the `clients.ServerConfig` for
@@ -91,35 +90,31 @@ type grpcTransport struct {
 	cc *grpc.ClientConn
 }
 
-func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.Stream[[]byte, any], error) {
+func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.Stream, error) {
 	s, err := g.cc.NewStream(ctx, &grpc.StreamDesc{StreamName: method, ClientStreams: true, ServerStreams: true}, method)
 	if err != nil {
 		return nil, err
 	}
-	return &stream[[]byte, any]{stream: s}, nil
+	return &stream{stream: s}, nil
 }
 
-func (g *grpcTransport) Close() error {
-	return g.cc.Close()
-}
-
-type stream[Req []byte, Res any] struct {
+type stream struct {
 	stream grpc.ClientStream
 }
 
-func (s *stream[Req, Res]) Send(msg Req) error {
-	protoReq, ok := any(msg).(proto.Message)
-	if !ok {
-		return fmt.Errorf("msg %v is not a valid Protobuf message", msg)
-	}
-	return s.stream.SendMsg(protoReq)
+func (s *stream) Send(msg []byte) error {
+	return s.stream.SendMsg(msg)
 }
 
-func (s *stream[Req, Res]) Recv() (Res, error) {
-	var typedRes Res
+func (s *stream) Recv() ([]byte, error) {
+	var typedRes []byte
 	err := s.stream.RecvMsg(&typedRes)
 	if err != nil {
 		return typedRes, err
 	}
 	return typedRes, nil
+}
+
+func (g *grpcTransport) Close() error {
+	return g.cc.Close()
 }
