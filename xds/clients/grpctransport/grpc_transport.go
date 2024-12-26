@@ -91,12 +91,12 @@ type grpcTransport struct {
 	cc *grpc.ClientConn
 }
 
-func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.Stream[[]byte, any], error) {
+func (g *grpcTransport) NewStream(ctx context.Context, method string) (clients.Stream, error) {
 	s, err := g.cc.NewStream(ctx, &grpc.StreamDesc{StreamName: method, ClientStreams: true, ServerStreams: true}, method)
 	if err != nil {
 		return nil, err
 	}
-	return &stream[[]byte, any]{stream: s}, nil
+	return &stream[[]byte, []byte]{stream: s}, nil
 }
 
 func (g *grpcTransport) Close() error {

@@ -34,7 +34,7 @@ type Transport interface {
 	// NewStream creates a new streaming call to the xDS server for
 	// specified method name. The returned Streaming interface can be used
 	// to send and receive messages on the stream.
-	NewStream(context.Context, string) (Stream[[]byte, any], error)
+	NewStream(context.Context, string) (Stream, error)
 
 	// Close closes the underlying connection and cleans up any resources used
 	// by the Transport.
@@ -42,13 +42,11 @@ type Transport interface {
 }
 
 // Stream is an interface that provides a way to send and receive
-// messages on a stream. It is generic over both the type of the request message
-// stream and type of response message stream to allow this interface to be used
-// for both ADS and LRS.
-type Stream[Req []byte, Res any] interface {
+// messages on a stream. Messages are represented as a byte slice ([]byte).
+type Stream interface {
 	// Send sends the provided message on the stream.
-	Send(Req) error
+	Send([]byte) error
 
 	// Recv block until the next message is received on the stream.
-	Recv() (Res, error)
+	Recv() ([]byte, error)
 }
