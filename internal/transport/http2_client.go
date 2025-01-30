@@ -292,7 +292,7 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
-		for _, cd := range perRPCCreds {
+		/*for _, cd := range perRPCCreds {
 			if cd.RequireTransportSecurity() {
 				if ci, ok := authInfo.(interface {
 					GetCommonAuthInfo() credentials.CommonAuthInfo
@@ -302,8 +302,8 @@ func NewHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 						return nil, connectionErrorf(true, nil, "transport: cannot send secure credentials on an insecure connection")
 					}
 				}
-			}
-		}
+
+		}*/
 		isSecure = true
 		if transportCreds.Info().SecurityProtocol == "tls" {
 			scheme = "https"

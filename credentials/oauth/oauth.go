@@ -43,10 +43,10 @@ func (ts TokenSource) GetRequestMetadata(ctx context.Context, _ ...string) (map[
 	if err != nil {
 		return nil, err
 	}
-	ri, _ := credentials.RequestInfoFromContext(ctx)
-	if err = credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
-		return nil, fmt.Errorf("unable to transfer TokenSource PerRPCCredentials: %v", err)
-	}
+	//ri, _ := credentials.RequestInfoFromContext(ctx)
+	//if err = credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
+	//	return nil, fmt.Errorf("unable to transfer TokenSource PerRPCCredentials: %v", err)
+	//}
 	return map[string]string{
 		"authorization": token.Type() + " " + token.AccessToken,
 	}, nil

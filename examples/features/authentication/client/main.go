@@ -28,9 +28,8 @@ import (
 
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
-	"google.golang.org/grpc/examples/data"
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
@@ -51,10 +50,10 @@ func main() {
 
 	// Set up the credentials for the connection.
 	perRPC := oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(fetchToken())}
-	creds, err := credentials.NewClientTLSFromFile(data.Path("x509/ca_cert.pem"), "x.test.example.com")
-	if err != nil {
-		log.Fatalf("failed to load credentials: %v", err)
-	}
+	//creds, err := credentials.NewClientTLSFromFile(data.Path("x509/ca_cert.pem"), "x.test.example.com")
+	//if err != nil {
+	//	log.Fatalf("failed to load credentials: %v", err)
+	//}
 	opts := []grpc.DialOption{
 		// In addition to the following grpc.DialOption, callers may also use
 		// the grpc.CallOption grpc.PerRPCCredentials with the RPC invocation
@@ -63,7 +62,7 @@ func main() {
 		grpc.WithPerRPCCredentials(perRPC),
 		// oauth.TokenSource requires the configuration of transport
 		// credentials.
-		grpc.WithTransportCredentials(creds),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
 	conn, err := grpc.NewClient(*addr, opts...)

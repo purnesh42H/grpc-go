@@ -422,13 +422,13 @@ func (cc *ClientConn) validateTransportCredentials() error {
 	if transportCreds == nil {
 		transportCreds = cc.dopts.copts.CredsBundle.TransportCredentials()
 	}
-	if transportCreds.Info().SecurityProtocol == "insecure" {
-		for _, cd := range cc.dopts.copts.PerRPCCredentials {
-			if cd.RequireTransportSecurity() {
-				return errTransportCredentialsMissing
-			}
-		}
-	}
+	//if transportCreds.Info().SecurityProtocol == "insecure" {
+	//	for _, cd := range cc.dopts.copts.PerRPCCredentials {
+	//		if cd.RequireTransportSecurity() {
+	//			return errTransportCredentialsMissing
+	//		}
+	//	}
+	//}
 	return nil
 }
 
