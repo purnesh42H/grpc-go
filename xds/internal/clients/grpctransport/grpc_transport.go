@@ -39,6 +39,11 @@ type ServerConfigExtension struct {
 	Credentials credentials.Bundle
 }
 
+// Equal returns true if sc and other are considered equal.
+func (sce ServerConfigExtension) Equal(other ServerConfigExtension) bool {
+	return sce.Credentials == other.Credentials
+}
+
 // Builder creates gRPC-based Transports. It must be paired with ServerConfigs
 // that contain Extension field of type ServerConfigExtension.
 type Builder struct{}

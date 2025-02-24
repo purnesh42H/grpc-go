@@ -43,6 +43,7 @@
 package clients
 
 import (
+	"fmt"
 	"slices"
 
 	"google.golang.org/protobuf/proto"
@@ -97,10 +98,17 @@ func (sc *ServerConfig) equal(other *ServerConfig) bool {
 	if sc.Extensions == nil && other.Extensions == nil {
 		return true
 	}
-	if ex, ok := sc.Extensions.(interface{ Equal(any) bool }); ok && ex.Equal(other.Extensions) {
-		return true
+	if ex, ok := sc.Extensions.(interface{ Equal(any) bool }); ok {
+		return ex.Equal(other.Extensions)
 	}
 	return false
+}
+
+func (sc *ServerConfig) string() string {
+	if ex, ok := sc.Extensions.(interface{ String() string }); ok {
+		return fmt.Sprintf("%s-%v-%s", sc.ServerURI, sc.IgnoreResourceDeletion, ex.String())
+	}
+	return fmt.Sprintf("%s-%v", sc.ServerURI, sc.IgnoreResourceDeletion)
 }
 
 // Node represents the identity of the xDS client, allowing xDS and LRS servers
@@ -180,4 +188,14 @@ func (l Locality) equal(other Locality) bool {
 // representation.
 func NodeProto(n Node) *v3corepb.Node {
 	return n.toProto()
+}
+
+// ServerConfigEqual returns true if s1 and s2 are considered equal.
+func ServerConfigEqual(s1, s2 *ServerConfig) bool {
+	return s1.equal(s2)
+}
+
+// ServerConfigString returns the string representation of the ServerConfig.
+func ServerConfigString(sc *ServerConfig) string {
+	return sc.string()
 }
