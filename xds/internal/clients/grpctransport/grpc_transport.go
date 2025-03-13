@@ -23,6 +23,7 @@ package grpctransport
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -37,6 +38,21 @@ type ServerIdentifierExtension struct {
 	// Credentials will be used for all gRPC transports. If it is unset,
 	// transport creation will fail.
 	Credentials credentials.Bundle
+}
+
+// String returns a string representation of the ServerIdentifierExtension.
+func (sie *ServerIdentifierExtension) String() string {
+	if sie.Credentials == nil {
+		return ""
+	}
+	var tcParts []string
+	tcInfo := sie.Credentials.TransportCredentials().Info()
+	for _, v := range []string{tcInfo.ProtocolVersion, tcInfo.SecurityProtocol, tcInfo.SecurityVersion, tcInfo.ServerName} {
+		if v != "" {
+			tcParts = append(tcParts, v)
+		}
+	}
+	return strings.Join([]string{strings.Join(tcParts, "-"), fmt.Sprintf("%v", sie.Credentials.PerRPCCredentials().RequireTransportSecurity())}, "-")
 }
 
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers

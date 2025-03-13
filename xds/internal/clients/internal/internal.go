@@ -37,7 +37,14 @@ import (
 // purposes. The output returned by this method is not guaranteed to be stable
 // and may change at any time. Do not rely on it for production use.
 func ServerIdentifierString(si clients.ServerIdentifier) string {
-	return strings.Join([]string{si.ServerURI, fmt.Sprintf("%v", si.Extensions)}, "-")
+	extStr := ""
+	if stringer, ok := si.Extensions.(fmt.Stringer); ok {
+		extStr = stringer.String()
+	}
+	if extStr == "" {
+		return si.ServerURI
+	}
+	return strings.Join([]string{si.ServerURI, extStr}, "-")
 }
 
 // NodeProto returns a protobuf representation of clients.Node n.
