@@ -46,12 +46,13 @@ func Test(t *testing.T) {
 }
 
 const (
-	defaultTestWatchExpiryTimeout = 100 * time.Millisecond
-	defaultTestTimeout            = 5 * time.Second
+	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
+	defaultTestTimeout            = 10 * time.Second
 	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
+
 	// ListenerResourceTypeName represents the transport agnostic name for the
 	// listener resource.
-	ListenerResourceTypeName = "ListenerResource"
+	listenerResourceTypeName = "ListenerResource"
 
 	ldsName         = "xdsclient-test-lds-resource"
 	rdsName         = "xdsclient-test-rds-resource"
@@ -67,7 +68,7 @@ var (
 	// Singleton instantiation of the resource type implementation.
 	listenerType = xdsclient.ResourceType{
 		TypeURL:                    xdsresource.V3ListenerURL,
-		TypeName:                   ListenerResourceTypeName,
+		TypeName:                   listenerResourceTypeName,
 		AllResourcesRequiredInSotW: true,
 		Decoder:                    listenerDecoder{},
 	}

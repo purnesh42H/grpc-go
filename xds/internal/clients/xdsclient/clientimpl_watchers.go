@@ -32,8 +32,8 @@ type wrappingWatcher struct {
 	nodeID string
 }
 
-func (w *wrappingWatcher) ambientError(err error, done func()) {
-	w.ResourceWatcher.AmbientError(fmt.Errorf("[xDS node id: %v]: %v", w.nodeID, err), done)
+func (w *wrappingWatcher) AmbientError(err error, done func()) {
+	w.ResourceWatcher.AmbientError(fmt.Errorf("[xDS node id: %v]: %w", w.nodeID, err), done)
 }
 
 // WatchResource uses xDS to discover the resource associated with the provided

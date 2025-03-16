@@ -21,6 +21,8 @@
 package xdsclient
 
 import (
+	"time"
+
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
@@ -65,4 +67,10 @@ func (c *XDSClient) DumpResources() *v3statuspb.ClientStatusResponse {
 	cfg := c.client.dumpResources()
 	resp.Config = append(resp.Config, cfg)
 	return resp
+}
+
+// SetWatchExpiryTimeoutForTesting override the default watch expiry timeout
+// with provided timeout value.
+func (c *XDSClient) SetWatchExpiryTimeoutForTesting(watchExpiryTimeout time.Duration) {
+	c.client.watchExpiryTimeout = watchExpiryTimeout
 }
