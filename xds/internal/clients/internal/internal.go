@@ -38,7 +38,8 @@ import (
 // and may change at any time. Do not rely on it for production use.
 func ServerIdentifierString(si clients.ServerIdentifier) string {
 	extStr := ""
-	if stringer, ok := si.Extensions.(fmt.Stringer); ok {
+	stringer, ok := si.Extensions.(fmt.Stringer)
+	if ok {
 		extStr = stringer.String()
 	}
 	if extStr == "" {

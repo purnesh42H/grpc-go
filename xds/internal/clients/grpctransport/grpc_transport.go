@@ -41,7 +41,7 @@ type ServerIdentifierExtension struct {
 }
 
 // String returns a string representation of the ServerIdentifierExtension.
-func (sie *ServerIdentifierExtension) String() string {
+func (sie ServerIdentifierExtension) String() string {
 	if sie.Credentials == nil {
 		return ""
 	}
@@ -51,6 +51,9 @@ func (sie *ServerIdentifierExtension) String() string {
 		if v != "" {
 			tcParts = append(tcParts, v)
 		}
+	}
+	if sie.Credentials.PerRPCCredentials() == nil {
+		return strings.Join(tcParts, "-")
 	}
 	return strings.Join([]string{strings.Join(tcParts, "-"), fmt.Sprintf("%v", sie.Credentials.PerRPCCredentials().RequireTransportSecurity())}, "-")
 }

@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clients/internal/pretty"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient/internal/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -265,4 +266,25 @@ func makeNewStyleCDSName(authority string) string {
 
 func makeNewStyleEDSName(authority string) string {
 	return fmt.Sprintf("xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource", authority)
+}
+
+// buildResourceName returns the resource name in the format of an xdstp://
+// resource.
+func buildResourceName(typeName, auth, id string, ctxParams map[string]string) string {
+	var typS string
+	switch typeName {
+	case listenerResourceTypeName:
+		typS = version.V3ListenerType
+	default:
+		// If the name doesn't match any of the standard resources fallback
+		// to the type name.
+		typS = typeName
+	}
+	return (&xdsresource.Name{
+		Scheme:        "xdstp",
+		Authority:     auth,
+		Type:          typS,
+		ID:            id,
+		ContextParams: ctxParams,
+	}).String()
 }

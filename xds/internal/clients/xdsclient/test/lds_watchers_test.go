@@ -46,7 +46,7 @@ import (
 
 type noopListenerWatcher struct{}
 
-func (noopListenerWatcher) ResourceChanged(update listenerResourceData, onDone func()) {
+func (noopListenerWatcher) ResourceChanged(update xdsclient.ResourceData, onDone func()) {
 	onDone()
 }
 func (noopListenerWatcher) ResourceError(err error, onDone func()) {
