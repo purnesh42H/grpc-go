@@ -46,16 +46,55 @@ func (sie ServerIdentifierExtension) String() string {
 		return ""
 	}
 	var tcParts []string
-	tcInfo := sie.Credentials.TransportCredentials().Info()
-	for _, v := range []string{tcInfo.ProtocolVersion, tcInfo.SecurityProtocol, tcInfo.SecurityVersion, tcInfo.ServerName} {
-		if v != "" {
-			tcParts = append(tcParts, v)
+	if sie.Credentials.TransportCredentials() != nil {
+		tcInfo := sie.Credentials.TransportCredentials().Info()
+		for _, v := range []string{tcInfo.ProtocolVersion, tcInfo.SecurityProtocol, tcInfo.ServerName} {
+			if v != "" {
+				tcParts = append(tcParts, v)
+			}
 		}
 	}
-	if sie.Credentials.PerRPCCredentials() == nil {
-		return strings.Join(tcParts, "-")
+	if sie.Credentials.PerRPCCredentials() != nil {
+		tcParts = append(tcParts, fmt.Sprintf("%v", sie.Credentials.PerRPCCredentials().RequireTransportSecurity()))
 	}
-	return strings.Join([]string{strings.Join(tcParts, "-"), fmt.Sprintf("%v", sie.Credentials.PerRPCCredentials().RequireTransportSecurity())}, "-")
+	return strings.Join(tcParts, "-")
+}
+
+// Equal returns true if sie and other are considered equal.
+func (sie ServerIdentifierExtension) Equal(other any) bool {
+	otherExt, ok := other.(ServerIdentifierExtension)
+	if !ok {
+		return false
+	}
+	switch {
+	case sie.Credentials == nil && otherExt.Credentials == nil:
+		return true
+	case (sie.Credentials != nil) != (otherExt.Credentials != nil):
+		return false
+	case (sie.Credentials.TransportCredentials() != nil) != (otherExt.Credentials.TransportCredentials() != nil):
+		return false
+	case (sie.Credentials.PerRPCCredentials() != nil) != (otherExt.Credentials.PerRPCCredentials() != nil):
+		return false
+	}
+
+	if sie.Credentials.TransportCredentials() != nil {
+		switch {
+		case sie.Credentials.TransportCredentials().Info().ProtocolVersion != otherExt.Credentials.TransportCredentials().Info().ProtocolVersion:
+			return false
+		case sie.Credentials.TransportCredentials().Info().SecurityProtocol != otherExt.Credentials.TransportCredentials().Info().SecurityProtocol:
+			return false
+		case sie.Credentials.TransportCredentials().Info().ServerName != otherExt.Credentials.TransportCredentials().Info().ServerName:
+			return false
+		}
+	}
+
+	if sie.Credentials.PerRPCCredentials() != nil {
+		if sie.Credentials.PerRPCCredentials().RequireTransportSecurity() != otherExt.Credentials.PerRPCCredentials().RequireTransportSecurity() {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Builder creates gRPC-based Transports. It must be paired with ServerIdentifiers
