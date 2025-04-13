@@ -20,7 +20,10 @@
 
 package lrsclient
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // A LoadStore aggregates loads for multiple clusters and services that are
 // intended to be reported via LRS.
@@ -53,6 +56,18 @@ func (ls *LoadStore) ReporterForCluster(clusterName, serviceName string) PerClus
 	panic("unimplemented")
 }
 
+// stats returns the load data for the given cluster names. Data is returned in
+// a slice with no specific order.
+//
+// If no clusterName is given (an empty slice), all data for all known clusters
+// is returned.
+//
+// If a cluster's Data is empty (no load to report), it's not appended to the
+// returned slice.
+func (s *LoadStore) stats(clusterNames []string) []*loadData {
+	panic("unimplemented")
+}
+
 // PerClusterReporter records load data pertaining to a single cluster. It
 // provides methods to record call starts, finishes, server-reported loads,
 // and dropped calls.
@@ -77,4 +92,51 @@ func (p *PerClusterReporter) CallServerLoad(locality, name string, val float64) 
 // CallDropped records a call dropped in the LoadStore.
 func (p *PerClusterReporter) CallDropped(category string) {
 	panic("unimplemented")
+}
+
+// loadData contains all load data reported to the LoadStore since the most recent
+// call to stats().
+type loadData struct {
+	// cluster is the name of the cluster this data is for.
+	cluster string
+	// service is the name of the EDS service this data is for.
+	service string
+	// totalDrops is the total number of dropped requests.
+	totalDrops uint64
+	// drops is the number of dropped requests per category.
+	drops map[string]uint64
+	// localityStats contains load reports per locality.
+	localityStats map[string]localityData
+	// reportInternal is the duration since last time load was reported (stats()
+	// was called).
+	ReportInterval time.Duration
+}
+
+// localityData contains load data for a single locality.
+type localityData struct {
+	// RequestStats contains counts of requests made to the locality.
+	RequestStats requestData
+	// loadStats contains server load data for requests made to the locality,
+	// indexed by the load type.
+	loadStats map[string]serverLoadData
+}
+
+// requestData contains request counts.
+type requestData struct {
+	// succeeded is the number of succeeded requests.
+	succeeded uint64
+	// errored is the number of requests which ran into errors.
+	errored uint64
+	// inProgress is the number of requests in flight.
+	inProgress uint64
+	// issued is the total number requests that were sent.
+	issued uint64
+}
+
+// serverLoadData contains server load data.
+type serverLoadData struct {
+	// count is the number of load reports.
+	count uint64
+	// sum is the total value of all load reports.
+	sum float64
 }
