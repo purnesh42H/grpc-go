@@ -64,7 +64,7 @@ type streamImpl struct {
 	mu           sync.Mutex
 	cancelStream context.CancelFunc // Cancel the stream. If nil, the stream is not active.
 	refCount     int                // Number of interested parties.
-	lrsStore     *LoadStore         // Store returned to user for pushing loads.
+	cleanup      func()
 }
 
 // streamOpts holds the options for creating an lrsStream.
@@ -75,16 +75,15 @@ type streamOpts struct {
 	logPrefix string                  // Prefix to be used for log messages.
 }
 
-// NewStreamImpl creates a new StreamImpl with the provided options.
+// newStreamImpl creates a new StreamImpl with the provided options.
 //
 // The actual streaming RPC call is initiated when the first call to ReportLoad
 // is made, and is terminated when the last call to ReportLoad is canceled.
-func NewStreamImpl(opts streamOpts) *streamImpl {
+func newStreamImpl(opts streamOpts) *streamImpl {
 	lrs := &streamImpl{
 		transport: opts.transport,
 		backoff:   opts.backoff,
 		nodeProto: opts.nodeProto,
-		lrsStore:  &LoadStore{},
 	}
 
 	l := grpclog.Component("xds")
@@ -96,51 +95,24 @@ func NewStreamImpl(opts streamOpts) *streamImpl {
 // Stop function that should be called when the load reporting is no longer
 // needed.
 //
-// The first call to ReportLoad sets the reference count to one, and starts the
-// LRS streaming call. Subsequent calls increment the reference count and return
-// the same LoadStore.
-//
-// The Stop function decrements the reference count and stops the LRS stream
-// when the last reference is removed.
-func (lrs *streamImpl) reportLoad() (*LoadStore, func()) {
+// The first call to reportLoad sets the reference count to one, and starts the
+// LRS streaming call. Subsequent calls increment the reference count.
+func (lrs *streamImpl) reportLoad() *LoadStore {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
 
-	cleanup := sync.OnceFunc(func() {
-		lrs.mu.Lock()
-		defer lrs.mu.Unlock()
-
-		if lrs.refCount == 0 {
-			lrs.logger.Errorf("Attempting to stop already stopped StreamImpl")
-			return
-		}
-		lrs.refCount--
-		if lrs.refCount != 0 {
-			return
-		}
-
-		if lrs.cancelStream == nil {
-			// It is possible that Stop() is called before the cleanup function
-			// is called, thereby setting cancelStream to nil. Hence we need a
-			// nil check here bofore invoking the cancel function.
-			return
-		}
-		lrs.cancelStream()
-		lrs.cancelStream = nil
-		lrs.logger.Infof("Stopping StreamImpl")
-	})
-
 	if lrs.refCount != 0 {
 		lrs.refCount++
-		return lrs.lrsStore, cleanup
+		return newLoadStore(lrs)
 	}
 
 	lrs.refCount++
 	ctx, cancel := context.WithCancel(context.Background())
 	lrs.cancelStream = cancel
 	lrs.doneCh = make(chan struct{})
-	go lrs.runner(ctx)
-	return lrs.lrsStore, cleanup
+	ls := newLoadStore(lrs)
+	go lrs.runner(ctx, ls)
+	return ls
 }
 
 // runner is responsible for managing the lifetime of an LRS streaming call. It
@@ -148,7 +120,7 @@ func (lrs *streamImpl) reportLoad() (*LoadStore, func()) {
 // LoadStatsResponse, and then starts a goroutine to periodically send
 // LoadStatsRequests. The runner will restart the stream if it encounters any
 // errors.
-func (lrs *streamImpl) runner(ctx context.Context) {
+func (lrs *streamImpl) runner(ctx context.Context, ls *LoadStore) {
 	defer close(lrs.doneCh)
 
 	// This feature indicates that the client supports the
@@ -185,7 +157,7 @@ func (lrs *streamImpl) runner(ctx context.Context) {
 
 		// We reset backoff state when we successfully receive at least one
 		// message from the server.
-		lrs.sendLoads(streamCtx, stream, clusters, interval)
+		lrs.sendLoads(streamCtx, stream, clusters, interval, ls)
 		return backoff.ErrResetBackoff
 	}
 	backoff.RunF(ctx, runLoadReportStream, lrs.backoff)
@@ -194,7 +166,7 @@ func (lrs *streamImpl) runner(ctx context.Context) {
 // sendLoads is responsible for periodically sending load reports to the LRS
 // server at the specified interval for the specified clusters, until the passed
 // in context is canceled.
-func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clusterNames []string, interval time.Duration) {
+func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clusterNames []string, interval time.Duration, ls *LoadStore) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
@@ -203,7 +175,7 @@ func (lrs *streamImpl) sendLoads(ctx context.Context, stream clients.Stream, clu
 		case <-ctx.Done():
 			return
 		}
-		if err := lrs.sendLoadStatsRequest(stream, lrs.lrsStore.stats(clusterNames)); err != nil {
+		if err := lrs.sendLoadStatsRequest(stream, ls.stats(clusterNames)); err != nil {
 			lrs.logger.Warningf("Writing to LRS stream failed: %v", err)
 			return
 		}
@@ -335,18 +307,32 @@ func getStreamError(stream clients.Stream) error {
 	}
 }
 
-// Stop blocks until the stream is closed and all spawned goroutines exit.
+// stop decrements the reference count and stops the LRS stream when the last
+// reference is removed.
 func (lrs *streamImpl) stop() {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
 
+	if lrs.refCount == 0 {
+		lrs.logger.Errorf("Attempting to stop already stopped StreamImpl")
+		return
+	}
+	lrs.refCount--
+	if lrs.refCount != 0 {
+		return
+	}
+
 	if lrs.cancelStream == nil {
+		// It is possible that Stop() is called before the cleanup function
+		// is called, thereby setting cancelStream to nil. Hence we need a
+		// nil check here bofore invoking the cancel function.
 		return
 	}
 	lrs.cancelStream()
 	lrs.cancelStream = nil
 	lrs.logger.Infof("Stopping LRS stream")
 	<-lrs.doneCh
+	lrs.cleanup()
 }
 
 // localityFromString converts a json representation of locality, into a
