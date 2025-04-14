@@ -1,5 +1,3 @@
-//revive:disable:unused-parameter
-
 /*
  *
  * Copyright 2025 gRPC authors.
@@ -37,6 +35,8 @@ const negativeOneUInt64 = ^uint64(0)
 //
 // It is safe for concurrent use.
 type LoadStore struct {
+	lrsStream *streamImpl
+
 	// mu only protects the map (2 layers). The read/write to
 	// *PerClusterReporter doesn't need to hold the mu.
 	mu sync.Mutex
@@ -51,6 +51,14 @@ type LoadStore struct {
 	clusters map[string]map[string]*PerClusterReporter
 }
 
+// newStore creates a LoadStore.
+func newLoadStore(lrsStream *streamImpl) *LoadStore {
+	return &LoadStore{
+		clusters:  make(map[string]map[string]*PerClusterReporter),
+		lrsStream: lrsStream,
+	}
+}
+
 // Stop stops the LRS stream associated with this LoadStore.
 //
 // If this LoadStore is the only one using the underlying LRS stream, the
@@ -62,8 +70,12 @@ type LoadStore struct {
 // attempt to flush any unreported load data to the LRS server. It will either
 // wait for this attempt to complete, or for the provided context to be done
 // before canceling the LRS stream.
-func (ls *LoadStore) Stop(ctx context.Context) error {
-	panic("unimplemented")
+func (ls *LoadStore) Stop(ctx context.Context) {
+	// Wait for the provided context to be done (timeout or cancellation).
+	if ctx != nil {
+		<-ctx.Done()
+	}
+	ls.lrsStream.stop()
 }
 
 // ReporterForCluster returns the PerClusterReporter for the given cluster and
@@ -212,13 +224,13 @@ func (p *PerClusterReporter) CallDropped(category string) {
 // rpc counts.
 //
 // It returns nil if the store doesn't contain any (new) data.
-func (ls *PerClusterReporter) stats() *loadData {
-	if ls == nil {
+func (p *PerClusterReporter) stats() *loadData {
+	if p == nil {
 		return nil
 	}
 
-	sd := newLoadData(ls.cluster, ls.service)
-	ls.drops.Range(func(key, val any) bool {
+	sd := newLoadData(p.cluster, p.service)
+	p.drops.Range(func(key, val any) bool {
 		d := atomic.SwapUint64(val.(*uint64), 0)
 		if d == 0 {
 			return true
@@ -232,7 +244,7 @@ func (ls *PerClusterReporter) stats() *loadData {
 		}
 		return true
 	})
-	ls.localityRPCCount.Range(func(key, val any) bool {
+	p.localityRPCCount.Range(func(key, val any) bool {
 		countData := val.(*rpcCountData)
 		succeeded := countData.loadAndClearSucceeded()
 		inProgress := countData.loadInProgress()
@@ -243,7 +255,7 @@ func (ls *PerClusterReporter) stats() *loadData {
 		}
 
 		ld := localityData{
-			RequestStats: requestData{
+			requestStats: requestData{
 				succeeded:  succeeded,
 				errored:    errored,
 				inProgress: inProgress,
@@ -266,10 +278,10 @@ func (ls *PerClusterReporter) stats() *loadData {
 		return true
 	})
 
-	ls.mu.Lock()
-	sd.ReportInterval = time.Since(ls.lastLoadReportAt)
-	ls.lastLoadReportAt = time.Now()
-	ls.mu.Unlock()
+	p.mu.Lock()
+	sd.reportInterval = time.Since(p.lastLoadReportAt)
+	p.lastLoadReportAt = time.Now()
+	p.mu.Unlock()
 
 	if sd.totalDrops == 0 && len(sd.drops) == 0 && len(sd.localityStats) == 0 {
 		return nil
@@ -292,13 +304,13 @@ type loadData struct {
 	localityStats map[string]localityData
 	// reportInternal is the duration since last time load was reported (stats()
 	// was called).
-	ReportInterval time.Duration
+	reportInterval time.Duration
 }
 
 // localityData contains load data for a single locality.
 type localityData struct {
-	// RequestStats contains counts of requests made to the locality.
-	RequestStats requestData
+	// requestStats contains counts of requests made to the locality.
+	requestStats requestData
 	// loadStats contains server load data for requests made to the locality,
 	// indexed by the load type.
 	loadStats map[string]serverLoadData
