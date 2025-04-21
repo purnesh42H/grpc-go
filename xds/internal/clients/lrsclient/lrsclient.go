@@ -22,6 +22,7 @@
 package lrsclient
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -52,9 +53,10 @@ type LRSClient struct {
 
 	// The LRSClient owns a bunch of streams to individual LRS servers.
 	//
-	// Once all references to a channel are dropped, the stream is closed.
-	channelsMu sync.Mutex
+	// Once all references to a stream are dropped, the stream is closed.
+	mu         sync.Mutex
 	lrsStreams map[clients.ServerIdentifier]*streamImpl // Map from server config to in-use streamImpls.
+	lrsRefs    map[clients.ServerIdentifier]int         // Map from server config to number of references.
 }
 
 // New returns a new LRS Client configured with the provided config.
@@ -71,6 +73,7 @@ func New(config Config) (*LRSClient, error) {
 		node:             config.Node,
 		backoff:          defaultExponentialBackoff,
 		lrsStreams:       make(map[clients.ServerIdentifier]*streamImpl),
+		lrsRefs:          make(map[clients.ServerIdentifier]int),
 	}
 	c.logger = prefixLogger(c)
 	return c, nil
@@ -83,7 +86,7 @@ func (c *LRSClient) ReportLoad(si clients.ServerIdentifier) (*LoadStore, error) 
 	if err != nil {
 		return nil, err
 	}
-	return lrs.reportLoad(), nil
+	return lrs.loadStore, nil
 }
 
 // getOrCreateLRSStream returns an lrs stream for the given server identifier.
@@ -91,8 +94,8 @@ func (c *LRSClient) ReportLoad(si clients.ServerIdentifier) (*LoadStore, error) 
 // If an active lrs stream exists for the given server identifier, it is
 // returned. Otherwise, a new lrs stream is created and returned.
 func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifier) (*streamImpl, error) {
-	c.channelsMu.Lock()
-	defer c.channelsMu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if c.logger.V(2) {
 		c.logger.Infof("Received request for a reference to an lrs stream for server identifier %q", serverIdentifier)
@@ -103,6 +106,7 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 		if c.logger.V(2) {
 			c.logger.Infof("Reusing an existing lrs stream for server identifier %q", serverIdentifier)
 		}
+		c.lrsRefs[serverIdentifier]++
 		return s, nil
 	}
 
@@ -129,13 +133,47 @@ func (c *LRSClient) getOrCreateLRSStream(serverIdentifier clients.ServerIdentifi
 		nodeProto: nodeProto,
 		logPrefix: logPrefix,
 	})
+	ctx, cancel := context.WithCancel(context.Background())
+	lrs.cancelStream = cancel
+	lrs.doneCh = make(chan struct{})
+	lrs.loadStore = newLoadStore(lrs)
+	go lrs.runner(ctx)
+
+	// Register a cleanup function that decrements the reference count, stops
+	// the LRS stream when the last reference is removed and closes the
+	// transport and removes the lrs stream and its references from the
+	// respective maps.
 	cleanup := func() {
-		c.channelsMu.Lock()
-		defer c.channelsMu.Unlock()
+		c.mu.Lock()
+		defer c.mu.Unlock()
+
+		if c.lrsRefs[serverIdentifier] == 0 {
+			c.logger.Errorf("Attempting to stop already stopped StreamImpl")
+			return
+		}
+		c.lrsRefs[serverIdentifier]--
+		if c.lrsRefs[serverIdentifier] != 0 {
+			return
+		}
+
+		if lrs.cancelStream == nil {
+			// It is possible that Stop() is called before the cleanup function
+			// is called, thereby setting cancelStream to nil. Hence we need a
+			// nil check here bofore invoking the cancel function.
+			return
+		}
+		lrs.cancelStream()
+		lrs.cancelStream = nil
+		lrs.logger.Infof("Stopping LRS stream")
+		<-lrs.doneCh
+
 		delete(c.lrsStreams, serverIdentifier)
 		tr.Close()
 	}
 	lrs.cleanup = cleanup
+
 	c.lrsStreams[serverIdentifier] = lrs
+	c.lrsRefs[serverIdentifier] = 1
+
 	return lrs, nil
 }
