@@ -28,23 +28,14 @@ import (
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
-func unmarshalRouteConfigResource(r *anypb.Any) (string, RouteConfigUpdate, error) {
-	r, err := UnwrapResource(r)
-	if err != nil {
-		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
-	}
-
-	if !IsRouteConfigResource(r.GetTypeUrl()) {
-		return "", RouteConfigUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
-	}
+func unmarshalRouteConfigResource(r []byte) (string, RouteConfigUpdate, error) {
 	rc := &v3routepb.RouteConfiguration{}
-	if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
+	if err := proto.Unmarshal(r, rc); err != nil {
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 

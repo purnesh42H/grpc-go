@@ -22,7 +22,6 @@ import (
 
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ClusterType is the type of cluster from a received CDS response.
@@ -74,7 +73,7 @@ type ClusterUpdate struct {
 	OutlierDetection json.RawMessage
 
 	// Raw is the resource from the xds response.
-	Raw *anypb.Any
+	Raw []byte
 	// TelemetryLabels are the string valued metadata of filter_metadata type
 	// "com.google.csm.telemetry_labels" with keys "service_name" or
 	// "service_namespace".

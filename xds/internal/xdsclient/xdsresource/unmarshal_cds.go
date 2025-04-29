@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -51,18 +50,9 @@ var ValidateClusterAndConstructClusterUpdateForTesting = validateClusterAndConst
 // to this value by the management server.
 const transportSocketName = "envoy.transport_sockets.tls"
 
-func unmarshalClusterResource(r *anypb.Any, serverCfg *bootstrap.ServerConfig) (string, ClusterUpdate, error) {
-	r, err := UnwrapResource(r)
-	if err != nil {
-		return "", ClusterUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
-	}
-
-	if !IsClusterResource(r.GetTypeUrl()) {
-		return "", ClusterUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
-	}
-
+func unmarshalClusterResource(r []byte, serverCfg *bootstrap.ServerConfig) (string, ClusterUpdate, error) {
 	cluster := &v3clusterpb.Cluster{}
-	if err := proto.Unmarshal(r.GetValue(), cluster); err != nil {
+	if err := proto.Unmarshal(r, cluster); err != nil {
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	cu, err := validateClusterAndConstructClusterUpdate(cluster, serverCfg)

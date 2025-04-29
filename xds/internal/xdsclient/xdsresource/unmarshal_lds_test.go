@@ -45,7 +45,6 @@ import (
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/rbac/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 
 	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"   // Register the RBAC HTTP filter.
@@ -283,7 +282,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName: v3RouteConfigName,
 				HTTPFilters:     []HTTPFilter{makeRouterFilter(t)},
-				Raw:             v3ListenerWithCDSConfigSourceSelf,
+				Raw:             v3ListenerWithCDSConfigSourceSelf.Value,
 			},
 		},
 		{
@@ -316,7 +315,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
 				HTTPFilters:       makeRouterFilterList(t),
-				Raw:               v3LisWithFilters(),
+				Raw:               v3LisWithFilters().Value,
 			},
 		},
 		{
@@ -357,7 +356,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					},
 					makeRouterFilter(t),
 				},
-				Raw: v3LisWithFilters(customFilter),
+				Raw: v3LisWithFilters(customFilter).Value,
 			},
 		},
 		{
@@ -374,7 +373,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					},
 					makeRouterFilter(t),
 				},
-				Raw: v3LisWithFilters(oldTypedStructFilter),
+				Raw: v3LisWithFilters(oldTypedStructFilter).Value,
 			},
 		},
 		{
@@ -391,7 +390,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					},
 					makeRouterFilter(t),
 				},
-				Raw: v3LisWithFilters(newTypedStructFilter),
+				Raw: v3LisWithFilters(newTypedStructFilter).Value,
 			},
 		},
 		{
@@ -408,7 +407,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					},
 					makeRouterFilter(t),
 				},
-				Raw: v3LisWithFilters(customOptionalFilter),
+				Raw: v3LisWithFilters(customOptionalFilter).Value,
 			},
 		},
 		{
@@ -434,7 +433,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				},
 					makeRouterFilter(t),
 				},
-				Raw: v3LisWithFilters(customFilter, customFilter2),
+				Raw: v3LisWithFilters(customFilter, customFilter2).Value,
 			},
 		},
 		{
@@ -450,7 +449,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: ListenerUpdate{
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
-				Raw:               v3LisWithFilters(serverOnlyOptionalCustomFilter),
+				Raw:               v3LisWithFilters(serverOnlyOptionalCustomFilter).Value,
 				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
@@ -467,7 +466,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Config: filterConfig{Cfg: clientOnlyCustomFilterConfig},
 					},
 					makeRouterFilter(t)},
-				Raw: v3LisWithFilters(clientOnlyCustomFilter),
+				Raw: v3LisWithFilters(clientOnlyCustomFilter).Value,
 			},
 		},
 		{
@@ -496,7 +495,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
 				HTTPFilters:       makeRouterFilterList(t),
-				Raw:               v3LisWithFilters(unknownOptionalFilter),
+				Raw:               v3LisWithFilters(unknownOptionalFilter).Value,
 			},
 		},
 		{
@@ -507,18 +506,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
 				HTTPFilters:       makeRouterFilterList(t),
-				Raw:               v3LisWithFilters(),
-			},
-		},
-		{
-			name:     "v3 listener resource wrapped",
-			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3LisWithFilters()}),
-			wantName: v3LDSTarget,
-			wantUpdate: ListenerUpdate{
-				RouteConfigName:   v3RouteConfigName,
-				MaxStreamDuration: time.Second,
-				HTTPFilters:       makeRouterFilterList(t),
-				Raw:               v3LisWithFilters(),
+				Raw:               v3LisWithFilters().Value,
 			},
 		},
 		// "To allow equating RBAC's direct_remote_ip and
@@ -533,7 +521,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				RouteConfigName:   v3RouteConfigName,
 				MaxStreamDuration: time.Second,
 				HTTPFilters:       []HTTPFilter{makeRouterFilter(t)},
-				Raw:               v3LisToTestRBAC(0, nil),
+				Raw:               v3LisToTestRBAC(0, nil).Value,
 			},
 		},
 		// In order to support xDS Configured RBAC HTTPFilter equating direct
@@ -568,7 +556,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}, ActionType: RouteActionRoute}},
 					}}},
 				MaxStreamDuration: time.Second,
-				Raw:               v3LisWithInlineRoute,
+				Raw:               v3LisWithInlineRoute.Value,
 				HTTPFilters:       makeRouterFilterList(t),
 			},
 		},
@@ -576,7 +564,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalListenerResource(test.resource)
+			name, update, err := unmarshalListenerResource(test.resource.Value)
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalListenerResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1342,7 +1330,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 				},
-				Raw: listenerEmptyTransportSocket,
+				Raw: listenerEmptyTransportSocket.Value,
 			},
 		},
 		{
@@ -1427,7 +1415,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 				},
-				Raw: listenerEmptyTransportSocket,
+				Raw: listenerEmptyTransportSocket.Value,
 			},
 		},
 		{
@@ -1552,7 +1540,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 				},
-				Raw: listenerNoValidationContextDeprecatedFields,
+				Raw: listenerNoValidationContextDeprecatedFields.Value,
 			},
 		},
 		{
@@ -1596,7 +1584,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 				},
-				Raw: listenerNoValidationContextNewFields,
+				Raw: listenerNoValidationContextNewFields.Value,
 			},
 		},
 		{
@@ -1646,7 +1634,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 				},
-				Raw: listenerWithValidationContextDeprecatedFields,
+				Raw: listenerWithValidationContextDeprecatedFields.Value,
 			},
 		},
 		{
@@ -1696,14 +1684,14 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 				},
-				Raw: listenerWithValidationContextNewFields,
+				Raw: listenerWithValidationContextNewFields.Value,
 			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalListenerResource(test.resource)
+			name, update, err := unmarshalListenerResource(test.resource.Value)
 			if err != nil && !strings.Contains(err.Error(), test.wantErr) {
 				t.Errorf("unmarshalListenerResource(%s) = %v wantErr: %q", pretty.ToJSON(test.resource), err, test.wantErr)
 			}

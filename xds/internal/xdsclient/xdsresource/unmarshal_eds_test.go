@@ -25,7 +25,6 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -452,7 +451,7 @@ func (s) TestUnmarshalEndpointHashKey(t *testing.T) {
 			cla := proto.Clone(baseCLA).(*v3endpointpb.ClusterLoadAssignment)
 			cla.Endpoints[0].LbEndpoints[0].Metadata = test.metadata
 			marshalledCLA := testutils.MarshalAny(t, cla)
-			_, update, err := unmarshalEndpointsResource(marshalledCLA)
+			_, update, err := unmarshalEndpointsResource(marshalledCLA.Value)
 			if err != nil {
 				t.Fatalf("unmarshalEndpointsResource() got error = %v, want success", err)
 			}
@@ -485,11 +484,6 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 		wantUpdate EndpointsUpdate
 		wantErr    bool
 	}{
-		{
-			name:     "non-clusterLoadAssignment resource type",
-			resource: &anypb.Any{TypeUrl: version.V3HTTPConnManagerURL},
-			wantErr:  true,
-		},
 		{
 			name: "badly marshaled clusterLoadAssignment resource",
 			resource: &anypb.Any{
@@ -537,44 +531,13 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 						Weight:   1,
 					},
 				},
-				Raw: v3EndpointsAny,
-			},
-		},
-		{
-			name:     "v3 endpoints wrapped",
-			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3EndpointsAny}),
-			wantName: "test",
-			wantUpdate: EndpointsUpdate{
-				Drops: nil,
-				Localities: []Locality{
-					{
-						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr1:314"},
-							HealthStatus: EndpointHealthStatusUnhealthy,
-							Weight:       271,
-						}},
-						ID:       internal.LocalityID{SubZone: "locality-1"},
-						Priority: 1,
-						Weight:   1,
-					},
-					{
-						Endpoints: []Endpoint{{
-							Addresses:    []string{"addr2:159"},
-							HealthStatus: EndpointHealthStatusDraining,
-							Weight:       828,
-						}},
-						ID:       internal.LocalityID{SubZone: "locality-2"},
-						Priority: 0,
-						Weight:   1,
-					},
-				},
-				Raw: v3EndpointsAny,
+				Raw: v3EndpointsAny.Value,
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalEndpointsResource(test.resource)
+			name, update, err := unmarshalEndpointsResource(test.resource.Value)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("unmarshalEndpointsResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}

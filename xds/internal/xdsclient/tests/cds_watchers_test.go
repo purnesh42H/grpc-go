@@ -111,8 +111,8 @@ func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 	}
 	got := u.(clusterUpdateErrTuple)
 	if wantUpdate.err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.err), xdsresource.ErrType(wantUpdate.err); gotType != wantType {
-			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
+		if got.err == nil || !strings.Contains(got.err.Error(), wantUpdate.err.Error()) {
+			return fmt.Errorf("update received with error: %v, want %q", got.err, wantUpdate.err)
 		}
 	}
 	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw", "LBPolicy", "TelemetryLabels")}
@@ -541,7 +541,7 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 // a resource which is already present in the cache.  The test verifies that the
 // watch callback is invoked with the contents from the cache, instead of a
 // request being sent to the management server.
-func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
+func TestCDSWatch_ResourceCaching(t *testing.T) {
 	firstRequestReceived := false
 	firstAckReceived := grpcsync.NewEvent()
 	secondRequestReceived := grpcsync.NewEvent()

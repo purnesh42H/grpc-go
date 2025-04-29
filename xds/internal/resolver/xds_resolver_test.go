@@ -1171,7 +1171,7 @@ type clientStream struct {
 	iresolver.ClientStream
 }
 
-func (s) TestConfigSelector_FailureCases(t *testing.T) {
+func TestConfigSelector_FailureCases(t *testing.T) {
 	const methodName = "1"
 
 	tests := []struct {

@@ -32,19 +32,12 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func unmarshalListenerResource(r *anypb.Any) (string, ListenerUpdate, error) {
-	r, err := UnwrapResource(r)
-	if err != nil {
-		return "", ListenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
-	}
-
-	if !IsListenerResource(r.GetTypeUrl()) {
-		return "", ListenerUpdate{}, fmt.Errorf("unexpected listener resource type: %q ", r.GetTypeUrl())
-	}
+func unmarshalListenerResource(r []byte) (string, ListenerUpdate, error) {
 	lis := &v3listenerpb.Listener{}
-	if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
+	if err := proto.Unmarshal(r, lis); err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
+	lis.GetApiListener()
 
 	lu, err := processListener(lis)
 	if err != nil {

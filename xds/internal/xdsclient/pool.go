@@ -24,10 +24,17 @@ import (
 	"time"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	"google.golang.org/grpc/credentials"
 	estats "google.golang.org/grpc/experimental/stats"
-	"google.golang.org/grpc/internal/backoff"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	xdsbootstrap "google.golang.org/grpc/xds/bootstrap"
+	"google.golang.org/grpc/xds/internal/clients"
+	"google.golang.org/grpc/xds/internal/clients/grpctransport"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	gxdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -89,7 +96,7 @@ func NewPool(config *bootstrap.Config) *Pool {
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
-	return p.newRefCounted(name, defaultWatchExpiryTimeout, backoff.DefaultExponential.Backoff, metricsRecorder)
+	return p.newRefCountedGeneric(name, metricsRecorder)
 }
 
 // NewClientForTesting returns an xDS client configured with the provided
@@ -116,7 +123,13 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.MetricsRecorder == nil {
 		opts.MetricsRecorder = istats.NewMetricsRecorderList(nil)
 	}
-	return p.newRefCounted(opts.Name, opts.WatchExpiryTimeout, opts.StreamBackoffAfterFailure, opts.MetricsRecorder)
+	c, close, err := p.newRefCountedGeneric(opts.Name, opts.MetricsRecorder)
+	if err != nil {
+		return c, close, err
+	}
+	c.SetWatchExpiryTimeoutForTesting(opts.WatchExpiryTimeout)
+	c.SetBackoffForTesting(opts.StreamBackoffAfterFailure)
+	return c, close, err
 }
 
 // GetClientForTesting returns an xDS client created earlier using the given
@@ -130,7 +143,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 // # Testing Only
 //
 // This function should ONLY be used for testing purposes.
-func (p *Pool) GetClientForTesting(name string) (XDSClient, func(), error) {
+func (p *Pool) GetClientForTesting(name string) (*clientRefCounted, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -163,7 +176,15 @@ func (p *Pool) DumpResources() *v3statuspb.ClientStatusResponse {
 
 	resp := &v3statuspb.ClientStatusResponse{}
 	for key, client := range p.clients {
-		cfg := client.dumpResources()
+		b, err := client.XDSClient.DumpResources()
+		if err != nil {
+			return nil
+		}
+		r := &v3statuspb.ClientStatusResponse{}
+		if err := proto.Unmarshal(b, r); err != nil {
+			return nil
+		}
+		cfg := r.Config[0]
 		cfg.ClientScope = key
 		resp.Config = append(resp.Config, cfg)
 	}
@@ -208,14 +229,11 @@ func (p *Pool) clientRefCountedClose(name string) {
 	// This attempts to close the transport to the management server and could
 	// theoretically call back into the xdsclient package again and deadlock.
 	// Hence, this needs to be called without holding the lock.
-	client.clientImpl.close()
+	client.XDSClient.Close()
 	xdsClientImplCloseHook(name)
 }
 
-// newRefCounted creates a new reference counted xDS client implementation for
-// name, if one does not exist already. If an xDS client for the given name
-// exists, it gets a reference to it and returns it.
-func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, streamBackoff func(int) time.Duration, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
+func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -246,17 +264,119 @@ func (p *Pool) newRefCounted(name string, watchExpiryTimeout time.Duration, stre
 		return c, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 	}
 
-	c, err := newClientImpl(p.config, watchExpiryTimeout, streamBackoff, metricsRecorder, name)
+	gAuthorities := make(map[string]gxdsclient.Authority)
+	credentials := make(map[string]credentials.Bundle)
+
+	var serverConfig *bootstrap.ServerConfig
+
+	for name, cfg := range p.config.Authorities() {
+		// If server configs are specified in the authorities map, use that.
+		// Else, use the top-level server configs.
+		serverCfg := p.config.XDSServers()
+		if len(cfg.XDSServers) >= 1 {
+			serverCfg = cfg.XDSServers
+		}
+		var gServerCfg []gxdsclient.ServerConfig
+		for _, sc := range serverCfg {
+			for _, cc := range sc.ChannelCreds() {
+				c := xdsbootstrap.GetCredentials(cc.Type)
+				if c == nil {
+					continue
+				}
+				bundle, _, err := c.Build(cc.Config)
+				if err != nil {
+					continue
+				}
+				credentials[cc.Type] = bundle
+			}
+			gServerCfg = append(gServerCfg, gxdsclient.ServerConfig{
+				ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{Credentials: sc.ChannelCreds()[0].Type}},
+				IgnoreResourceDeletion: sc.ServerFeaturesIgnoreResourceDeletion()})
+			serverConfig = sc
+		}
+		gAuthorities[name] = gxdsclient.Authority{XDSServers: gServerCfg}
+	}
+
+	var gServerCfg []gxdsclient.ServerConfig
+
+	for _, sc := range p.config.XDSServers() {
+		for _, cc := range sc.ChannelCreds() {
+			c := xdsbootstrap.GetCredentials(cc.Type)
+			if c == nil {
+				continue
+			}
+			bundle, _, err := c.Build(cc.Config)
+			if err != nil {
+				continue
+			}
+			credentials[cc.Type] = bundle
+		}
+		gServerCfg = append(gServerCfg, gxdsclient.ServerConfig{
+			ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{Credentials: sc.ChannelCreds()[0].Type}},
+			IgnoreResourceDeletion: sc.ServerFeaturesIgnoreResourceDeletion()})
+		serverConfig = sc
+	}
+
+	node := p.config.Node()
+	gNode := clients.Node{
+		ID:               node.GetId(),
+		Cluster:          node.GetCluster(),
+		Metadata:         node.Metadata,
+		UserAgentName:    node.UserAgentName,
+		UserAgentVersion: node.GetUserAgentVersion(),
+	}
+	if node.Locality != nil {
+		gNode.Locality = clients.Locality{
+			Region:  node.Locality.Region,
+			Zone:    node.Locality.Zone,
+			SubZone: node.Locality.SubZone,
+		}
+	}
+
+	gTransportBuilder := grpctransport.NewBuilder(credentials)
+
+	resouceTypes := make(map[string]gxdsclient.ResourceType)
+	resouceTypes[xdsresource.ListenerType.TypeURL] = xdsclient.ResourceType{
+		TypeURL:                    xdsresource.ListenerType.TypeURL,
+		TypeName:                   xdsresource.ListenerType.TypeName,
+		AllResourcesRequiredInSotW: xdsresource.ListenerType.AllResourcesRequiredInSotW,
+		Decoder:                    &xdsresource.ListenerDecoder{BootstrapConfig: p.config},
+	}
+	resouceTypes[xdsresource.RouteConfigType.TypeURL] = xdsclient.ResourceType{
+		TypeURL:                    xdsresource.RouteConfigType.TypeURL,
+		TypeName:                   xdsresource.RouteConfigType.TypeName,
+		AllResourcesRequiredInSotW: xdsresource.RouteConfigType.AllResourcesRequiredInSotW,
+		Decoder:                    &xdsresource.RouteConfigDecoder{BootstrapConfig: p.config},
+	}
+	resouceTypes[xdsresource.ClusterResourceType.TypeURL] = xdsclient.ResourceType{
+		TypeURL:                    xdsresource.ClusterResourceType.TypeURL,
+		TypeName:                   xdsresource.ClusterResourceType.TypeName,
+		AllResourcesRequiredInSotW: xdsresource.ClusterResourceType.AllResourcesRequiredInSotW,
+		Decoder:                    &xdsresource.ClusterDecoder{BootstrapConfig: p.config, ServerConfig: serverConfig},
+	}
+	resouceTypes[xdsresource.EndpointsType.TypeURL] = xdsclient.ResourceType{
+		TypeURL:                    xdsresource.EndpointsType.TypeURL,
+		TypeName:                   xdsresource.EndpointsType.TypeName,
+		AllResourcesRequiredInSotW: xdsresource.EndpointsType.AllResourcesRequiredInSotW,
+		Decoder:                    &xdsresource.EndpointsDecoder{},
+	}
+
+	gConfig := xdsclient.Config{
+		Authorities:      gAuthorities,
+		Servers:          gServerCfg,
+		Node:             gNode,
+		TransportBuilder: gTransportBuilder,
+		ResourceTypes:    resouceTypes,
+	}
+
+	c, err := gxdsclient.New(gConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	if logger.V(2) {
-		c.logger.Infof("Created client with name %q and bootstrap configuration:\n %s", name, p.config)
-	}
-	client := &clientRefCounted{clientImpl: c, refCount: 1}
+	client := &clientRefCounted{clientImpl: &clientImpl{XDSClient: c, config: p.config}, refCount: 1}
 	p.clients[name] = client
+
 	xdsClientImplCreateHook(name)
 
-	logger.Infof("xDS node ID: %s", p.config.Node().GetId())
 	return client, sync.OnceFunc(func() { p.clientRefCountedClose(name) }), nil
 }

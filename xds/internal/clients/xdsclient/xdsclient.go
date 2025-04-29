@@ -120,9 +120,15 @@ func New(config Config) (*XDSClient, error) {
 }
 
 // SetWatchExpiryTimeoutForTesting override the default watch expiry timeout
-// with provided timeout value.
+// with provided timeout value for testing.
 func (c *XDSClient) SetWatchExpiryTimeoutForTesting(watchExpiryTimeout time.Duration) {
 	c.watchExpiryTimeout = watchExpiryTimeout
+}
+
+// SetBackoffForTesting override the default backoff with provided function
+// for testing.
+func (c *XDSClient) SetBackoffForTesting(backoff func(v int) time.Duration) {
+	c.backoff = backoff
 }
 
 // newClient returns a new XDSClient with the given config.

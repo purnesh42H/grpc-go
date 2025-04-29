@@ -114,7 +114,8 @@ func (b *Builder) Build(si clients.ServerIdentifier) (clients.Transport, error) 
 		Time:    5 * time.Minute,
 		Timeout: 20 * time.Second,
 	})
-	cc, err := grpc.NewClient(si.ServerURI, kpCfg, grpc.WithCredentialsBundle(creds), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{})))
+	dopts := []grpc.DialOption{kpCfg, grpc.WithCredentialsBundle(creds), grpc.WithDefaultCallOptions(grpc.ForceCodec(&byteCodec{}))}
+	cc, err := grpc.NewClient(si.ServerURI, dopts...)
 	if err != nil {
 		return nil, fmt.Errorf("grpctransport: failed to create connection to server %q: %v", si.ServerURI, err)
 	}

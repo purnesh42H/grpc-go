@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/codes"
@@ -815,11 +814,6 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:     "non-routeConfig resource type",
-			resource: &anypb.Any{TypeUrl: version.V3HTTPConnManagerURL},
-			wantErr:  true,
-		},
-		{
 			name: "badly marshaled routeconfig resource",
 			resource: &anypb.Any{
 				TypeUrl: version.V3RouteConfigURL,
@@ -846,35 +840,13 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							ActionType:       RouteActionRoute}},
 					},
 				},
-				Raw: v3RouteConfig,
-			},
-		},
-		{
-			name:     "v3 routeConfig resource wrapped",
-			resource: testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3RouteConfig}),
-			wantName: v3RouteConfigName,
-			wantUpdate: RouteConfigUpdate{
-				VirtualHosts: []*VirtualHost{
-					{
-						Domains: []string{uninterestingDomain},
-						Routes: []*Route{{Prefix: newStringP(""),
-							WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-							ActionType:       RouteActionRoute}},
-					},
-					{
-						Domains: []string{ldsTarget},
-						Routes: []*Route{{Prefix: newStringP(""),
-							WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
-							ActionType:       RouteActionRoute}},
-					},
-				},
-				Raw: v3RouteConfig,
+				Raw: v3RouteConfig.Value,
 			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalRouteConfigResource(test.resource)
+			name, update, err := unmarshalRouteConfigResource(test.resource.Value)
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalRouteConfigResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}

@@ -19,7 +19,6 @@ package xdsresource
 
 import (
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // OverloadDropConfig contains the config to drop overloads.
@@ -72,5 +71,5 @@ type EndpointsUpdate struct {
 	Localities []Locality
 
 	// Raw is the resource from the xds response.
-	Raw *anypb.Any
+	Raw []byte
 }
