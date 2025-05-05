@@ -646,7 +646,7 @@ func (s) TestLRSLogicalDNS(t *testing.T) {
 	}
 
 	// Handle the initial LRS request from the xDS client.
-	if _, err = mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
+	if _, err := mgmtServer.LRSServer.LRSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Failure waiting for initial LRS request: %v", err)
 	}
 

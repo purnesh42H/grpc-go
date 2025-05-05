@@ -25,6 +25,7 @@ import (
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/xds/internal/clients/lrsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 )
 
@@ -49,6 +50,8 @@ type XDSClient interface {
 	WatchResource(rType xdsclient.ResourceType, resourceName string, watcher xdsclient.ResourceWatcher) (cancel func())
 
 	BootstrapConfig() *bootstrap.Config
+
+	ReportLoad(*bootstrap.ServerConfig) (*lrsclient.LoadStore, func())
 
 	SetWatchExpiryTimeoutForTesting(time.Duration)
 

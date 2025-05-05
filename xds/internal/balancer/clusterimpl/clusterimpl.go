@@ -43,7 +43,6 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/loadstore"
 	"google.golang.org/grpc/xds/internal/clients/lrsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
 const (
@@ -97,7 +96,6 @@ type clusterImplBalancer struct {
 	// The following fields are only accessed from balancer API methods, which
 	// are guaranteed to be called serially by gRPC.
 	xdsClient        xdsclient.XDSClient     // Sent down in ResolverState attributes.
-	lrsClient        lrsclient.LRSClient     // Sent down in ResolverState attributes.
 	cancelLoadReport func()                  // To stop reporting load through the above xDS client.
 	edsServiceName   string                  // EDS service name to report load for.
 	lrsServer        *bootstrap.ServerConfig // Load reporting server configuration.
@@ -230,9 +228,9 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 		}
 	}
 	if startNewLoadReport {
-		var loadStore *load.Store
+		var loadStore *lrsclient.LoadStore
 		if b.xdsClient != nil {
-			//loadStore, b.cancelLoadReport = b.lrsClient.ReportLoad(b.lrsServer)
+			loadStore, b.cancelLoadReport = b.xdsClient.ReportLoad(b.lrsServer)
 		}
 		b.loadWrapper.UpdateLoadStore(loadStore)
 	}

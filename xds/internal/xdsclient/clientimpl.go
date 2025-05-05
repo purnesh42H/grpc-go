@@ -25,7 +25,9 @@ import (
 
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/bootstrap"
+	"google.golang.org/grpc/xds/internal/clients/lrsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 )
 
@@ -78,11 +80,12 @@ var (
 type clientImpl struct {
 	*xdsclient.XDSClient
 
-	config *bootstrap.Config
+	config    *bootstrap.Config
+	lrsClient *lrsclient.LRSClient
+	logger    *grpclog.PrefixLogger // Logger for this client.
 }
 
 func init() {
-
 	DefaultPool = &Pool{clients: make(map[string]*clientRefCounted)}
 }
 

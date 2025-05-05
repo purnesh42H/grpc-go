@@ -278,6 +278,7 @@ func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsR
 		}
 		var gServerCfg []gxdsclient.ServerConfig
 		for _, sc := range serverCfg {
+			selectedCreds := ""
 			for _, cc := range sc.ChannelCreds() {
 				c := xdsbootstrap.GetCredentials(cc.Type)
 				if c == nil {
@@ -287,10 +288,13 @@ func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsR
 				if err != nil {
 					continue
 				}
+				if selectedCreds == "" {
+					selectedCreds = cc.Type
+				}
 				credentials[cc.Type] = bundle
 			}
 			gServerCfg = append(gServerCfg, gxdsclient.ServerConfig{
-				ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{Credentials: sc.ChannelCreds()[0].Type}},
+				ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{Credentials: selectedCreds}},
 				IgnoreResourceDeletion: sc.ServerFeaturesIgnoreResourceDeletion()})
 			serverConfig = sc
 		}
@@ -300,6 +304,7 @@ func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsR
 	var gServerCfg []gxdsclient.ServerConfig
 
 	for _, sc := range p.config.XDSServers() {
+		selectedCreds := ""
 		for _, cc := range sc.ChannelCreds() {
 			c := xdsbootstrap.GetCredentials(cc.Type)
 			if c == nil {
@@ -309,10 +314,13 @@ func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsR
 			if err != nil {
 				continue
 			}
+			if selectedCreds == "" {
+				selectedCreds = cc.Type
+			}
 			credentials[cc.Type] = bundle
 		}
 		gServerCfg = append(gServerCfg, gxdsclient.ServerConfig{
-			ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{Credentials: sc.ChannelCreds()[0].Type}},
+			ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{Credentials: selectedCreds}},
 			IgnoreResourceDeletion: sc.ServerFeaturesIgnoreResourceDeletion()})
 		serverConfig = sc
 	}
@@ -374,6 +382,7 @@ func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsR
 		return nil, nil, err
 	}
 	client := &clientRefCounted{clientImpl: &clientImpl{XDSClient: c, config: p.config}, refCount: 1}
+	client.clientImpl.logger = prefixLogger(client.clientImpl)
 	p.clients[name] = client
 
 	xdsClientImplCreateHook(name)
