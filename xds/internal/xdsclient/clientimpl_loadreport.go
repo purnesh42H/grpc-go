@@ -19,6 +19,7 @@ package xdsclient
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/credentials"
@@ -89,9 +90,9 @@ func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*lrsclient.Load
 		c.logger.Warningf("Failed to create a load store to the management server to report load: %v", server, err)
 		return nil, func() {}
 	}
-	return load, func() {
+	return load, sync.OnceFunc(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), loadStoreStopTimeout)
 		defer cancel()
 		load.Stop(ctx)
-	}
+	})
 }
