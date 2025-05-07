@@ -35,7 +35,7 @@ import (
 // Tests the state transitions of the resource specific watch state within the
 // ADS stream, specifically when the stream breaks (for both resources that have
 // been previously received and for resources that are yet to be received).
-func TestADS_WatchState_StreamBreaks(t *testing.T) {
+func (s) TestADS_WatchState_StreamBreaks(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
@@ -129,7 +129,7 @@ func TestADS_WatchState_StreamBreaks(t *testing.T) {
 
 // Tests the behavior of the xDS client when a resource watch timer expires and
 // verifies the resource watch state transitions as expected.
-func TestADS_WatchState_TimerFires(t *testing.T) {
+func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 

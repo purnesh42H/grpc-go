@@ -133,6 +133,8 @@ func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
 }
 
 func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Filter, httpfilter.FilterConfig, error) {
+	// "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
+	//  type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 	config, typeURL, err := unwrapHTTPFilterConfig(cfg)
 	if err != nil {
 		return nil, nil, err

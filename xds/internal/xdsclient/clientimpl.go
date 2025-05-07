@@ -23,12 +23,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"google.golang.org/grpc/experimental/stats"
 	estats "google.golang.org/grpc/experimental/stats"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/clients/lrsclient"
 	"google.golang.org/grpc/xds/internal/clients/xdsclient"
+	xdsmetrics "google.golang.org/grpc/xds/internal/clients/xdsclient/metrics"
 )
 
 const (
@@ -75,6 +77,32 @@ var (
 	})
 )
 
+// metricsReporter implements the clients.MetricsReporter interface and uses an
+// underlying stats.MetricsRecorderList to record metrics.
+type metricsReporter struct {
+	stats.MetricsRecorder
+
+	target string
+}
+
+// ReportMetric implements the clients.MetricsReporter interface.
+// It receives metric data, determines the appropriate metric based on the type
+// of the data, and records it using the embedded MetricsRecorderList.
+func (mr *metricsReporter) ReportMetric(metric any) {
+	if mr.MetricsRecorder == nil {
+		return
+	}
+
+	switch m := metric.(type) {
+	case *xdsmetrics.ResourceUpdateValid:
+		xdsClientResourceUpdatesValidMetric.Record(mr.MetricsRecorder, 1, mr.target, m.ServerURI, m.ResourceType)
+	case *xdsmetrics.ResourceUpdateInvalid:
+		xdsClientResourceUpdatesInvalidMetric.Record(mr.MetricsRecorder, 1, mr.target, m.ServerURI, m.ResourceType)
+	case *xdsmetrics.ServerFailure:
+		xdsClientServerFailureMetric.Record(mr.MetricsRecorder, 1, mr.target, m.ServerURI)
+	}
+}
+
 // clientImpl is the real implementation of the xDS client. The exported Client
 // is a wrapper of this struct with a ref count.
 type clientImpl struct {
@@ -82,7 +110,8 @@ type clientImpl struct {
 
 	config    *bootstrap.Config
 	lrsClient *lrsclient.LRSClient
-	logger    *grpclog.PrefixLogger // Logger for this client.
+	logger    *grpclog.PrefixLogger
+	target    string
 }
 
 func init() {

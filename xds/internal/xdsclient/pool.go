@@ -72,6 +72,15 @@ type OptionsForTesting struct {
 	// MetricsRecorder is the metrics recorder the xDS Client will use. If
 	// unspecified, uses a no-op MetricsRecorder.
 	MetricsRecorder estats.MetricsRecorder
+
+	// ResourceTypes is a map from resource type URLs to resource type
+	// implementations. Each resource type URL uniquely identifies a specific
+	// kind of xDS resource, and the corresponding resource type implementation
+	// provides logic for parsing, validating, and processing resources of that
+	// type.
+	//
+	// For example: "type.googleapis.com/envoy.config.listener.v3.Listener"
+	ResourceTypes map[string]gxdsclient.ResourceType
 }
 
 // NewPool creates a new xDS client pool with the given bootstrap config.
@@ -96,7 +105,7 @@ func NewPool(config *bootstrap.Config) *Pool {
 // expected to invoke once they are done using the client.  It is safe for the
 // caller to invoke this close function multiple times.
 func (p *Pool) NewClient(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
-	return p.newRefCountedGeneric(name, metricsRecorder)
+	return p.newRefCountedGeneric(name, metricsRecorder, nil)
 }
 
 // NewClientForTesting returns an xDS client configured with the provided
@@ -123,7 +132,7 @@ func (p *Pool) NewClientForTesting(opts OptionsForTesting) (XDSClient, func(), e
 	if opts.MetricsRecorder == nil {
 		opts.MetricsRecorder = istats.NewMetricsRecorderList(nil)
 	}
-	c, close, err := p.newRefCountedGeneric(opts.Name, opts.MetricsRecorder)
+	c, close, err := p.newRefCountedGeneric(opts.Name, opts.MetricsRecorder, opts.ResourceTypes)
 	if err != nil {
 		return c, close, err
 	}
@@ -233,7 +242,7 @@ func (p *Pool) clientRefCountedClose(name string) {
 	xdsClientImplCloseHook(name)
 }
 
-func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsRecorder) (XDSClient, func(), error) {
+func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsRecorder, resourceTypes map[string]gxdsclient.ResourceType) (XDSClient, func(), error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -343,45 +352,50 @@ func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsR
 
 	gTransportBuilder := grpctransport.NewBuilder(credentials)
 
-	resouceTypes := make(map[string]gxdsclient.ResourceType)
-	resouceTypes[xdsresource.ListenerType.TypeURL] = xdsclient.ResourceType{
-		TypeURL:                    xdsresource.ListenerType.TypeURL,
-		TypeName:                   xdsresource.ListenerType.TypeName,
-		AllResourcesRequiredInSotW: xdsresource.ListenerType.AllResourcesRequiredInSotW,
-		Decoder:                    &xdsresource.ListenerDecoder{BootstrapConfig: p.config},
+	if len(resourceTypes) == 0 {
+		resourceTypes = make(map[string]gxdsclient.ResourceType)
+		resourceTypes[xdsresource.ListenerType.TypeURL] = xdsclient.ResourceType{
+			TypeURL:                    xdsresource.ListenerType.TypeURL,
+			TypeName:                   xdsresource.ListenerType.TypeName,
+			AllResourcesRequiredInSotW: xdsresource.ListenerType.AllResourcesRequiredInSotW,
+			Decoder:                    &xdsresource.ListenerDecoder{BootstrapConfig: p.config},
+		}
+		resourceTypes[xdsresource.RouteConfigType.TypeURL] = xdsclient.ResourceType{
+			TypeURL:                    xdsresource.RouteConfigType.TypeURL,
+			TypeName:                   xdsresource.RouteConfigType.TypeName,
+			AllResourcesRequiredInSotW: xdsresource.RouteConfigType.AllResourcesRequiredInSotW,
+			Decoder:                    &xdsresource.RouteConfigDecoder{BootstrapConfig: p.config},
+		}
+		resourceTypes[xdsresource.ClusterResourceType.TypeURL] = xdsclient.ResourceType{
+			TypeURL:                    xdsresource.ClusterResourceType.TypeURL,
+			TypeName:                   xdsresource.ClusterResourceType.TypeName,
+			AllResourcesRequiredInSotW: xdsresource.ClusterResourceType.AllResourcesRequiredInSotW,
+			Decoder:                    &xdsresource.ClusterDecoder{BootstrapConfig: p.config, ServerConfig: serverConfig},
+		}
+		resourceTypes[xdsresource.EndpointsType.TypeURL] = xdsclient.ResourceType{
+			TypeURL:                    xdsresource.EndpointsType.TypeURL,
+			TypeName:                   xdsresource.EndpointsType.TypeName,
+			AllResourcesRequiredInSotW: xdsresource.EndpointsType.AllResourcesRequiredInSotW,
+			Decoder:                    &xdsresource.EndpointsDecoder{},
+		}
 	}
-	resouceTypes[xdsresource.RouteConfigType.TypeURL] = xdsclient.ResourceType{
-		TypeURL:                    xdsresource.RouteConfigType.TypeURL,
-		TypeName:                   xdsresource.RouteConfigType.TypeName,
-		AllResourcesRequiredInSotW: xdsresource.RouteConfigType.AllResourcesRequiredInSotW,
-		Decoder:                    &xdsresource.RouteConfigDecoder{BootstrapConfig: p.config},
-	}
-	resouceTypes[xdsresource.ClusterResourceType.TypeURL] = xdsclient.ResourceType{
-		TypeURL:                    xdsresource.ClusterResourceType.TypeURL,
-		TypeName:                   xdsresource.ClusterResourceType.TypeName,
-		AllResourcesRequiredInSotW: xdsresource.ClusterResourceType.AllResourcesRequiredInSotW,
-		Decoder:                    &xdsresource.ClusterDecoder{BootstrapConfig: p.config, ServerConfig: serverConfig},
-	}
-	resouceTypes[xdsresource.EndpointsType.TypeURL] = xdsclient.ResourceType{
-		TypeURL:                    xdsresource.EndpointsType.TypeURL,
-		TypeName:                   xdsresource.EndpointsType.TypeName,
-		AllResourcesRequiredInSotW: xdsresource.EndpointsType.AllResourcesRequiredInSotW,
-		Decoder:                    &xdsresource.EndpointsDecoder{},
-	}
+
+	mr := &metricsReporter{MetricsRecorder: metricsRecorder, target: name}
 
 	gConfig := xdsclient.Config{
 		Authorities:      gAuthorities,
 		Servers:          gServerCfg,
 		Node:             gNode,
 		TransportBuilder: gTransportBuilder,
-		ResourceTypes:    resouceTypes,
+		ResourceTypes:    resourceTypes,
+		MetricsReporter:  mr,
 	}
 
 	c, err := gxdsclient.New(gConfig)
 	if err != nil {
 		return nil, nil, err
 	}
-	client := &clientRefCounted{clientImpl: &clientImpl{XDSClient: c, config: p.config}, refCount: 1}
+	client := &clientRefCounted{clientImpl: &clientImpl{XDSClient: c, config: p.config, target: name}, refCount: 1}
 	client.clientImpl.logger = prefixLogger(client.clientImpl)
 	p.clients[name] = client
 

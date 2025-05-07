@@ -541,7 +541,7 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 // a resource which is already present in the cache.  The test verifies that the
 // watch callback is invoked with the contents from the cache, instead of a
 // request being sent to the management server.
-func TestCDSWatch_ResourceCaching(t *testing.T) {
+func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 	firstRequestReceived := false
 	firstAckReceived := grpcsync.NewEvent()
 	secondRequestReceived := grpcsync.NewEvent()

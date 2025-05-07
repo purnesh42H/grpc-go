@@ -25,11 +25,6 @@ import (
 	"testing"
 	"time"
 
-	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -47,6 +42,12 @@ import (
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
 // Give the fallback tests additional time to complete because they need to
