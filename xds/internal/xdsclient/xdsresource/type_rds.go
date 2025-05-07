@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // RouteConfigUpdate contains information received in an RDS response, which is
@@ -36,7 +35,7 @@ type RouteConfigUpdate struct {
 	// ClusterSpecifierPlugins referenced by the Route Table.
 	ClusterSpecifierPlugins map[string]clusterspecifier.BalancerConfig
 	// Raw is the resource from the xds response.
-	Raw *anypb.Any
+	Raw []byte
 }
 
 // VirtualHost contains the routes for a list of Domains.

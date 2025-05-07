@@ -30,21 +30,11 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func unmarshalEndpointsResource(r *anypb.Any) (string, EndpointsUpdate, error) {
-	r, err := UnwrapResource(r)
-	if err != nil {
-		return "", EndpointsUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
-	}
-
-	if !IsEndpointsResource(r.GetTypeUrl()) {
-		return "", EndpointsUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
-	}
-
+func unmarshalEndpointsResource(r []byte) (string, EndpointsUpdate, error) {
 	cla := &v3endpointpb.ClusterLoadAssignment{}
-	if err := proto.Unmarshal(r.GetValue(), cla); err != nil {
+	if err := proto.Unmarshal(r, cla); err != nil {
 		return "", EndpointsUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 

@@ -18,7 +18,9 @@
 
 package testutils
 
-import "google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+import (
+	gxdsclient "google.golang.org/grpc/xds/internal/clients/xdsclient"
+)
 
 // TestResourceWatcher implements the xdsresource.ResourceWatcher interface,
 // used to receive updates on watches registered with the xDS client, when using
@@ -28,7 +30,7 @@ import "google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 // errors sent by the xDS client.
 type TestResourceWatcher struct {
 	// UpdateCh is the channel on which xDS client updates are delivered.
-	UpdateCh chan *xdsresource.ResourceData
+	UpdateCh chan *gxdsclient.ResourceData
 	// AmbientErrorCh is the channel on which ambient errors from the xDS
 	// client are delivered.
 	AmbientErrorCh chan error
@@ -38,7 +40,7 @@ type TestResourceWatcher struct {
 }
 
 // ResourceChanged is invoked by the xDS client to report the latest update.
-func (w *TestResourceWatcher) ResourceChanged(data xdsresource.ResourceData, onDone func()) {
+func (w *TestResourceWatcher) ResourceChanged(data gxdsclient.ResourceData, onDone func()) {
 	defer onDone()
 	select {
 	case <-w.UpdateCh:
@@ -76,7 +78,7 @@ func (w *TestResourceWatcher) AmbientError(err error, onDone func()) {
 // via the xDS client.
 func NewTestResourceWatcher() *TestResourceWatcher {
 	return &TestResourceWatcher{
-		UpdateCh:        make(chan *xdsresource.ResourceData, 1),
+		UpdateCh:        make(chan *gxdsclient.ResourceData, 1),
 		AmbientErrorCh:  make(chan error, 1),
 		ResourceErrorCh: make(chan struct{}, 1),
 	}

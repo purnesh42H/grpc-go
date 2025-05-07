@@ -40,7 +40,6 @@ import (
 	v3leastrequestpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/least_request/v3"
 	v3ringhashpb "github.com/envoyproxy/go-control-plane/envoy/extensions/load_balancing_policies/ring_hash/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -1552,20 +1551,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				ClusterName:     v3ClusterName,
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
-				Raw:             v3ClusterAny,
-				TelemetryLabels: internal.UnknownCSMLabels,
-			},
-		},
-		{
-			name:      "v3 cluster wrapped",
-			resource:  testutils.MarshalAny(t, &v3discoverypb.Resource{Resource: v3ClusterAny}),
-			serverCfg: serverCfg,
-			wantName:  v3ClusterName,
-			wantUpdate: ClusterUpdate{
-				ClusterName:     v3ClusterName,
-				EDSServiceName:  v3Service,
-				LRSServerConfig: serverCfg,
-				Raw:             v3ClusterAny,
+				Raw:             v3ClusterAny.Value,
 				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
@@ -1578,7 +1564,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				ClusterName:     v3ClusterName,
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
-				Raw:             v3ClusterAnyWithEDSConfigSourceSelf,
+				Raw:             v3ClusterAnyWithEDSConfigSourceSelf.Value,
 				TelemetryLabels: internal.UnknownCSMLabels,
 			},
 		},
@@ -1591,7 +1577,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				ClusterName:     v3ClusterName,
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
-				Raw:             v3ClusterAnyWithTelemetryLabels,
+				Raw:             v3ClusterAnyWithTelemetryLabels.Value,
 				TelemetryLabels: map[string]string{
 					"csm.service_name":           "grpc-service",
 					"csm.service_namespace_name": "grpc-service-namespace",
@@ -1607,7 +1593,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				ClusterName:     v3ClusterName,
 				EDSServiceName:  v3Service,
 				LRSServerConfig: serverCfg,
-				Raw:             v3ClusterAnyWithTelemetryLabelsIgnoreSome,
+				Raw:             v3ClusterAnyWithTelemetryLabelsIgnoreSome.Value,
 				TelemetryLabels: map[string]string{
 					"csm.service_name":           "grpc-service",
 					"csm.service_namespace_name": "unknown",
@@ -1634,7 +1620,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalClusterResource(test.resource, test.serverCfg)
+			name, update, err := unmarshalClusterResource(test.resource.Value, test.serverCfg)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("unmarshalClusterResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}

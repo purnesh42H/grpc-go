@@ -18,10 +18,11 @@
 package xdsresource
 
 import (
+	"bytes"
+
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const (
@@ -31,30 +32,20 @@ const (
 )
 
 var (
-	// Compile time interface checks.
-	_ Type = endpointsResourceType{}
-
 	// Singleton instantiation of the resource type implementation.
-	endpointsType = endpointsResourceType{
-		resourceTypeState: resourceTypeState{
-			typeURL:                    version.V3EndpointsURL,
-			typeName:                   "EndpointsResource",
-			allResourcesRequiredInSotW: false,
-		},
+	EndpointsType = xdsclient.ResourceType{
+		TypeURL:                    version.V3EndpointsURL,
+		TypeName:                   "EndpointsResource",
+		AllResourcesRequiredInSotW: false,
 	}
 )
 
-// endpointsResourceType provides the resource-type specific functionality for a
-// ClusterLoadAssignment (or Endpoints) resource.
-//
-// Implements the Type interface.
-type endpointsResourceType struct {
-	resourceTypeState
+type EndpointsDecoder struct {
 }
 
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
-func (endpointsResourceType) Decode(_ *DecodeOptions, resource *anypb.Any) (*DecodeResult, error) {
+func (ed *EndpointsDecoder) Decode(resource []byte, opts xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	name, rc, err := unmarshalEndpointsResource(resource)
 	switch {
 	case name == "":
@@ -62,10 +53,10 @@ func (endpointsResourceType) Decode(_ *DecodeOptions, resource *anypb.Any) (*Dec
 		return nil, err
 	case err != nil:
 		// Protobuf deserialization succeeded, but resource validation failed.
-		return &DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: EndpointsUpdate{}}}, err
+		return &xdsclient.DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: EndpointsUpdate{}}}, err
 	}
 
-	return &DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: rc}}, nil
+	return &xdsclient.DecodeResult{Name: name, Resource: &EndpointsResourceData{Resource: rc}}, nil
 
 }
 
@@ -74,7 +65,7 @@ func (endpointsResourceType) Decode(_ *DecodeOptions, resource *anypb.Any) (*Dec
 //
 // Implements the ResourceData interface.
 type EndpointsResourceData struct {
-	ResourceData
+	xdsclient.ResourceData
 
 	// TODO: We have always stored update structs by value. See if this can be
 	// switched to a pointer?
@@ -82,14 +73,14 @@ type EndpointsResourceData struct {
 }
 
 // RawEqual returns true if other is equal to r.
-func (e *EndpointsResourceData) RawEqual(other ResourceData) bool {
+func (e *EndpointsResourceData) Equal(other xdsclient.ResourceData) bool {
 	if e == nil && other == nil {
 		return true
 	}
 	if (e == nil) != (other == nil) {
 		return false
 	}
-	return proto.Equal(e.Resource.Raw, other.Raw())
+	return bytes.Equal(e.Resource.Raw, other.Bytes())
 
 }
 
@@ -99,7 +90,7 @@ func (e *EndpointsResourceData) ToJSON() string {
 }
 
 // Raw returns the underlying raw protobuf form of the listener resource.
-func (e *EndpointsResourceData) Raw() *anypb.Any {
+func (e *EndpointsResourceData) Bytes() []byte {
 	return e.Resource.Raw
 }
 
@@ -127,7 +118,7 @@ type delegatingEndpointsWatcher struct {
 	watcher EndpointsWatcher
 }
 
-func (d *delegatingEndpointsWatcher) ResourceChanged(data ResourceData, onDone func()) {
+func (d *delegatingEndpointsWatcher) ResourceChanged(data xdsclient.ResourceData, onDone func()) {
 	e := data.(*EndpointsResourceData)
 	d.watcher.ResourceChanged(e, onDone)
 }
@@ -144,5 +135,5 @@ func (d *delegatingEndpointsWatcher) AmbientError(err error, onDone func()) {
 // provided endpoints resource name.
 func WatchEndpoints(p Producer, name string, w EndpointsWatcher) (cancel func()) {
 	delegator := &delegatingEndpointsWatcher{watcher: w}
-	return p.WatchResource(endpointsType, name, delegator)
+	return p.WatchResource(EndpointsType, name, delegator)
 }

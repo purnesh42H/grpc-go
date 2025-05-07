@@ -32,6 +32,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
 type noopListenerWatcher struct{}
@@ -75,9 +77,9 @@ func (s) TestResourceUpdateMetrics(t *testing.T) {
 
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
+			 "server_uri": %q,
+			 "channel_creds": [{"type": "insecure"}]
+		 }]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			"authority": []byte("{}"),
@@ -177,9 +179,9 @@ func (s) TestServerFailureMetrics_BeforeResponseRecv(t *testing.T) {
 
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
+			 "server_uri": %q,
+			 "channel_creds": [{"type": "insecure"}]
+		 }]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			"authority": []byte("{}"),
@@ -265,9 +267,9 @@ func (s) TestServerFailureMetrics_AfterResponseRecv(t *testing.T) {
 
 	bootstrapContents, err := bootstrap.NewContentsForTesting(bootstrap.ConfigOptionsForTesting{
 		Servers: []byte(fmt.Sprintf(`[{
-			"server_uri": %q,
-			"channel_creds": [{"type": "insecure"}]
-		}]`, mgmtServer.Address)),
+			 "server_uri": %q,
+			 "channel_creds": [{"type": "insecure"}]
+		 }]`, mgmtServer.Address)),
 		Node: []byte(fmt.Sprintf(`{"id": "%s"}`, nodeID)),
 		Authorities: map[string]json.RawMessage{
 			"authority": []byte("{}"),

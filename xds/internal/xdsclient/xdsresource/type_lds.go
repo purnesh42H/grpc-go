@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // ListenerUpdate contains information received in an LDS response, which is of
@@ -49,7 +48,7 @@ type ListenerUpdate struct {
 	InboundListenerCfg *InboundListenerConfig
 
 	// Raw is the resource from the xds response.
-	Raw *anypb.Any
+	Raw []byte
 }
 
 // HTTPFilter represents one HTTP filter from an LDS response's HTTP connection

@@ -21,6 +21,7 @@ package xdsresource
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ErrorType is the type of the error that the watcher will receive from the xds
@@ -67,6 +68,32 @@ func NewErrorf(t ErrorType, format string, args ...any) error {
 // error, to pass additional information about the error.
 func NewError(t ErrorType, message string) error {
 	return NewErrorf(t, "%s", message)
+}
+
+// NewErrorFromMessage creates an xDS client error from the message based on
+// keywords potentially present in the error string.
+//
+// Warning: Relying on string content to determine error types is brittle and
+// generally discouraged. Error messages can change, breaking this logic.
+// Prefer using type assertions or checking specific error variables where possible.
+func NewErrorFromMessage(message string) error {
+	// Define keywords or phrases associated with each error type.
+	// These are just examples and might need adjustment based on actual error messages.
+	switch {
+	case strings.Contains(message, "connection error"):
+		return &xdsClientError{t: ErrorTypeConnection, desc: message}
+	case strings.Contains(message, "resource not found"), strings.Contains(message, "does not exist"):
+		return &xdsClientError{t: ErrorTypeResourceNotFound, desc: message}
+	case strings.Contains(message, "unsupported resource type"):
+		return &xdsClientError{t: ErrorTypeResourceTypeUnsupported, desc: message}
+	case strings.Contains(message, "stream failed"): // This might be too generic
+		return &xdsClientError{t: ErrTypeStreamFailedAfterRecv, desc: message}
+	case strings.Contains(message, "NACKed"), strings.Contains(message, "invalid"): // "invalid" might be too generic
+		return &xdsClientError{t: ErrorTypeNACKed, desc: message}
+	default:
+		// If no specific keyword is found, default to Unknown.
+		return &xdsClientError{t: ErrorTypeUnknown, desc: message}
+	}
 }
 
 // ErrType returns the error's type.

@@ -27,16 +27,17 @@ package xdsresource
 import (
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsinternal "google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/clients/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
 func init() {
 	xdsinternal.ResourceTypeMapForTesting = make(map[string]any)
-	xdsinternal.ResourceTypeMapForTesting[version.V3ListenerURL] = listenerType
-	xdsinternal.ResourceTypeMapForTesting[version.V3RouteConfigURL] = routeConfigType
-	xdsinternal.ResourceTypeMapForTesting[version.V3ClusterURL] = clusterType
-	xdsinternal.ResourceTypeMapForTesting[version.V3EndpointsURL] = endpointsType
+	xdsinternal.ResourceTypeMapForTesting[version.V3ListenerURL] = ListenerType
+	xdsinternal.ResourceTypeMapForTesting[version.V3RouteConfigURL] = RouteConfigType
+	xdsinternal.ResourceTypeMapForTesting[version.V3ClusterURL] = ClusterResourceType
+	xdsinternal.ResourceTypeMapForTesting[version.V3EndpointsURL] = EndpointsType
 }
 
 // Producer contains a single method to discover resource configuration from a
@@ -49,7 +50,7 @@ type Producer interface {
 	// xDS responses are are deserialized and validated, as received from the
 	// xDS management server. Upon receipt of a response from the management
 	// server, an appropriate callback on the watcher is invoked.
-	WatchResource(rType Type, resourceName string, watcher ResourceWatcher) (cancel func())
+	WatchResource(rType xdsclient.ResourceType, resourceName string, watcher xdsclient.ResourceWatcher) (cancel func())
 }
 
 // ResourceWatcher is notified of the resource updates and errors that are
@@ -63,7 +64,7 @@ type Producer interface {
 // providing future ResourceWatcher notifications.
 type ResourceWatcher interface {
 	// ResourceChanged indicates a new version of the resource is available.
-	ResourceChanged(resourceData ResourceData, done func())
+	ResourceChanged(resourceData xdsclient.ResourceData, done func())
 
 	// ResourceError indicates an error occurred while trying to fetch or
 	// decode the associated resource. The previous version of the resource
@@ -123,7 +124,7 @@ type ResourceData interface {
 	// ToJSON returns a JSON string representation of the resource data.
 	ToJSON() string
 
-	Raw() *anypb.Any
+	Raw() []byte
 }
 
 // DecodeOptions wraps the options required by ResourceType implementation for
