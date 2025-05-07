@@ -18,19 +18,6 @@
 
 package xdsclient_test
 
-import (
-	"context"
-	"fmt"
-	"time"
-
-	xdsinternal "google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/internal"
-	"google.golang.org/grpc/xds/internal/xdsclient/transport/ads"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
-)
-
 /*
 // Tests the state transitions of the resource specific watch state within the
 // ADS stream, specifically when the stream breaks (for both resources that have
@@ -170,7 +157,7 @@ func (s) TestADS_WatchState_TimerFires(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-*/
+
 
 func waitForResourceWatchState(ctx context.Context, client xdsclient.XDSClient, resourceName string, wantState ads.WatchState, wantTimer bool) error {
 	var lastErr error
@@ -202,3 +189,4 @@ func verifyResourceWatchState(client xdsclient.XDSClient, resourceName string, w
 	}
 	return nil
 }
+*/

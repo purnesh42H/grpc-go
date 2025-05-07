@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -45,7 +43,6 @@ import (
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/load"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
@@ -63,11 +60,6 @@ const (
 
 var (
 	testBackendEndpoints = []resolver.Endpoint{{Addresses: []resolver.Address{{Addr: "1.1.1.1:1"}}}}
-	cmpOpts              = cmp.Options{
-		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreFields(load.Data{}, "ReportInterval"),
-	}
-	toleranceCmpOpt = cmpopts.EquateApprox(0, 1e-5)
 )
 
 type s struct {
