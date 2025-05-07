@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/xds/bootstrap"
 	xdsbootstrap "google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/clients"
@@ -39,7 +38,7 @@ const (
 //
 // It returns a lrsclient.LoadStore for the user to report loads.
 func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*lrsclient.LoadStore, func()) {
-	credentials := make(map[string]credentials.Bundle)
+	configs := make(map[string]grpctransport.Config)
 	selectedCreds := ""
 
 	for _, cc := range server.ChannelCreds() {
@@ -54,9 +53,9 @@ func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*lrsclient.Load
 		if selectedCreds == "" {
 			selectedCreds = cc.Type
 		}
-		credentials[cc.Type] = bundle
+		configs[cc.Type] = grpctransport.Config{Credential: bundle}
 	}
-	lrsServerIdentifier := clients.ServerIdentifier{ServerURI: server.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{Credentials: selectedCreds}}
+	lrsServerIdentifier := clients.ServerIdentifier{ServerURI: server.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: selectedCreds}}
 
 	if c.lrsClient == nil {
 		node := c.BootstrapConfig().Node()
@@ -75,7 +74,7 @@ func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*lrsclient.Load
 			}
 		}
 
-		gTransportBuilder := grpctransport.NewBuilder(credentials)
+		gTransportBuilder := grpctransport.NewBuilder(configs)
 
 		lrsConfig := lrsclient.Config{Node: gNode, TransportBuilder: gTransportBuilder}
 		lrsC, err := lrsclient.New(lrsConfig)

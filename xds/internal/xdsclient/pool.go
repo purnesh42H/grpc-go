@@ -24,7 +24,7 @@ import (
 	"time"
 
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc"
 	estats "google.golang.org/grpc/experimental/stats"
 	istats "google.golang.org/grpc/internal/stats"
 	"google.golang.org/grpc/internal/xds/bootstrap"
@@ -274,7 +274,7 @@ func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsR
 	}
 
 	gAuthorities := make(map[string]gxdsclient.Authority)
-	credentials := make(map[string]credentials.Bundle)
+	configs := make(map[string]grpctransport.Config)
 
 	var serverConfig *bootstrap.ServerConfig
 
@@ -300,10 +300,16 @@ func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsR
 				if selectedCreds == "" {
 					selectedCreds = cc.Type
 				}
-				credentials[cc.Type] = bundle
+				configs[cc.Type] = grpctransport.Config{
+					Credential: bundle,
+					GRPCNewClient: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+						opts = append(opts, sc.DialOptions()...)
+						return grpc.NewClient(target, opts...)
+					},
+				}
 			}
 			gServerCfg = append(gServerCfg, gxdsclient.ServerConfig{
-				ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{Credentials: selectedCreds}},
+				ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: selectedCreds}},
 				IgnoreResourceDeletion: sc.ServerFeaturesIgnoreResourceDeletion()})
 			serverConfig = sc
 		}
@@ -326,10 +332,16 @@ func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsR
 			if selectedCreds == "" {
 				selectedCreds = cc.Type
 			}
-			credentials[cc.Type] = bundle
+			configs[cc.Type] = grpctransport.Config{
+				Credential: bundle,
+				GRPCNewClient: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+					opts = append(opts, sc.DialOptions()...)
+					return grpc.NewClient(target, opts...)
+				},
+			}
 		}
 		gServerCfg = append(gServerCfg, gxdsclient.ServerConfig{
-			ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{Credentials: selectedCreds}},
+			ServerIdentifier:       clients.ServerIdentifier{ServerURI: sc.ServerURI(), Extensions: grpctransport.ServerIdentifierExtension{ConfigName: selectedCreds}},
 			IgnoreResourceDeletion: sc.ServerFeaturesIgnoreResourceDeletion()})
 		serverConfig = sc
 	}
@@ -350,7 +362,7 @@ func (p *Pool) newRefCountedGeneric(name string, metricsRecorder estats.MetricsR
 		}
 	}
 
-	gTransportBuilder := grpctransport.NewBuilder(credentials)
+	gTransportBuilder := grpctransport.NewBuilder(configs)
 
 	if len(resourceTypes) == 0 {
 		resourceTypes = make(map[string]gxdsclient.ResourceType)
