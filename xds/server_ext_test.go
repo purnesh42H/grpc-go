@@ -530,7 +530,7 @@ func (s) TestServer_MultipleServers_DifferentBootstrapConfigurations(t *testing.
 	}
 }
 
-func TestXDSRace_ClientStuckOnLDS(t *testing.T) {
+func (s) TestXDSRace_ClientStuckOnLDS(t *testing.T) {
 	wrappedLis := testutils.NewListenerWrapper(t, nil)
 	lis := testutils.NewRestartableListener(wrappedLis)
 
