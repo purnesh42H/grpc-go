@@ -427,6 +427,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig
 	// resource unless ignore_resource_deletion option was set in the server
 	// config.
 	if !rType.AllResourcesRequiredInSotW() {
+		a.cleanupStaleResources(rType)
 		return
 	}
 	for name, state := range resourceStates {
@@ -488,6 +489,8 @@ func (a *authority) handleADSResourceUpdate(serverConfig *bootstrap.ServerConfig
 			})
 		}
 	}
+
+	a.cleanupStaleResources(rType)
 }
 
 // adsResourceDoesNotExist is called by the xDS client implementation (on all
@@ -531,6 +534,8 @@ func (a *authority) handleADSResourceDoesNotExist(rType xdsresource.Type, resour
 			watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q does not exist", resourceName, rType.TypeName()), func() {})
 		})
 	}
+
+	a.cleanupStaleResources(rType)
 }
 
 // handleRevertingToPrimaryOnUpdate is called when a resource update is received
@@ -646,10 +651,15 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 				xdsChannelConfigs: map[*xdsChannelWithConfig]bool{xdsChannel: true},
 			}
 			resources[resourceName] = state
-			xdsChannel.channel.subscribe(rType, resourceName)
+			//xdsChannel.channel.subscribe(rType, resourceName)
 		}
 		// Always add the new watcher to the set of watchers.
 		state.watchers[watcher] = true
+		// Ensure the resource is subscribed on the active channel, as re-watches
+		// might occur after unsubscribes or channel changes.
+		xdsChannel.channel.subscribe(rType, resourceName)
+		// Add the active channel to the resource's channel configs if not already present.
+		state.xdsChannelConfigs[xdsChannel] = true
 
 		// If we have a cached copy of the resource, notify the new watcher
 		// immediately.
@@ -712,6 +722,11 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 			// there when the watch was registered.
 			resources := a.resources[rType]
 			state := resources[resourceName]
+			if state == nil {
+				// Should not happen if watch was successful.
+				a.logger.Warningf("Attempting to unwatch resource %q of type %q which is not currently watched", resourceName, rType.TypeName())
+				return
+			}
 
 			// Delete this particular watcher from the list of watchers, so that its
 			// callback will not be invoked in the future.
@@ -732,7 +747,7 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 			for xcc := range state.xdsChannelConfigs {
 				xcc.channel.unsubscribe(rType, resourceName)
 			}
-			delete(resources, resourceName)
+			/*delete(resources, resourceName)
 
 			// If there are no more watchers for this resource type, delete the
 			// resource type from the top-level map.
@@ -749,7 +764,7 @@ func (a *authority) unwatchResource(rType xdsresource.Type, resourceName string,
 					a.logger.Infof("Removing last watch for for any resource type, releasing reference to the xdsChannel")
 				}
 				a.closeXDSChannels()
-			}
+			}*/
 		}, func() { close(done) })
 		<-done
 	})
@@ -863,6 +878,41 @@ func (a *authority) close() {
 	<-a.xdsClientSerializer.Done()
 	if a.logger.V(2) {
 		a.logger.Infof("Closed")
+	}
+}
+
+// cleanupStaleResources iterates through all resources of the given type and
+// removes the state for resources that have no active watchers. This is called
+// after processing an ADS update or a resource-does-not-exist event to ensure
+// that resources that were unsubscribed (and thus have no watchers) are
+// eventually removed from the authority's cache.
+func (a *authority) cleanupStaleResources(rType xdsresource.Type) {
+	resources := a.resources[rType]
+	if resources == nil {
+		return
+	}
+
+	for name, state := range resources {
+		if len(state.watchers) == 0 {
+			if a.logger.V(2) {
+				a.logger.Infof("Removing resource state for %q of type %q as it has no watchers after an update cycle", name, rType.TypeName())
+			}
+			delete(resources, name)
+		}
+	}
+
+	if len(resources) == 0 {
+		if a.logger.V(2) {
+			a.logger.Infof("Removing resource type %q from cache as it has no more resources", rType.TypeName())
+		}
+		delete(a.resources, rType)
+	}
+
+	if len(a.resources) == 0 {
+		if a.logger.V(2) {
+			a.logger.Infof("Removing last watch for any resource type, releasing reference to the xdsChannels")
+		}
+		a.closeXDSChannels()
 	}
 }
 
